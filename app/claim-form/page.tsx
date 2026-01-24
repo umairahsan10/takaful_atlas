@@ -292,17 +292,11 @@ export default function DocumentExtractor() {
       return;
     }
 
-    // Store the file for later processing
+    // Store the file for later processing - don't change layout yet
     setSelectedFile(file);
     setError(null);
     setHasExtracted(false);
     setExtractionTime(null);
-
-    const reader = new FileReader();
-    reader.onload = (e) => {
-      setSelectedImage(e.target?.result as string);
-    };
-    reader.readAsDataURL(file);
   };
 
   const handleProcessImage = async () => {
@@ -312,13 +306,13 @@ export default function DocumentExtractor() {
     startTimeRef.current = Date.now();
     setExtractionTime(null);
     setPdfExtractionMethod(null);
+    setIsLoading(true);
 
     try {
       let fileToProcess = selectedFile;
 
       // If PDF mode, extract image from PDF first
       if (uploadMode === 'pdf') {
-        setIsLoading(true);
         try {
           const pdfResult = await extractImageFromPDF(selectedFile);
           setPdfExtractionMethod(pdfResult.method);
@@ -326,6 +320,13 @@ export default function DocumentExtractor() {
           
           // Convert the extracted image blob to a File for OCR
           fileToProcess = blobToFile(pdfResult.imageBlob, 'extracted-image.png');
+          
+          // Convert the extracted image blob to a data URL for preview - AFTER successful extraction
+          const reader = new FileReader();
+          reader.onload = (e) => {
+            setSelectedImage(e.target?.result as string);
+          };
+          reader.readAsDataURL(pdfResult.imageBlob);
         } catch (pdfErr) {
           // Handle PDF-specific errors
           if (typeof pdfErr === 'object' && pdfErr !== null && 'code' in pdfErr) {
@@ -334,6 +335,13 @@ export default function DocumentExtractor() {
           }
           throw new Error("Failed to extract image from PDF. Please try a different file or use an image directly.");
         }
+      } else {
+        // For images, show preview after reading - AFTER starting extraction
+        const reader = new FileReader();
+        reader.onload = (e) => {
+          setSelectedImage(e.target?.result as string);
+        };
+        reader.readAsDataURL(selectedFile);
       }
 
       const extractedData = await extractTextFromImage(fileToProcess);
@@ -355,9 +363,12 @@ export default function DocumentExtractor() {
       setFormData(INITIAL_FORM_DATA);
       setHasExtracted(false);
       setPdfExtractionMethod(null);
+      setSelectedImage(null);
       if (fileInputRef.current) {
         fileInputRef.current.value = "";
       }
+    } finally {
+      setIsLoading(false);
     }
   };
 
@@ -612,30 +623,6 @@ export default function DocumentExtractor() {
                   />
                 </div>
 
-                {selectedImage && (
-                  <div className="mt-6 space-y-3 animate-in fade-in duration-500">
-                    <div className="flex items-center justify-between">
-                      <p className="text-xs font-bold text-gray-700 uppercase tracking-widest">
-                        Document Preview
-                      </p>
-                      <span className="px-2 py-1 bg-blue-100 text-blue-700 text-xs font-semibold rounded-full">
-                        Ready to Extract
-                      </span>
-                    </div>
-                    <div className="relative group">
-                      <div className="absolute inset-0 bg-gradient-to-r from-blue-500 to-indigo-500 rounded-2xl blur opacity-20 group-hover:opacity-30 transition-opacity duration-300"></div>
-                      <div className="relative w-full h-48 bg-gradient-to-br from-gray-50 to-gray-100 rounded-2xl overflow-hidden border border-gray-200 shadow-lg">
-                        <Image
-                          src={selectedImage}
-                          alt="Document preview"
-                          fill
-                          className="object-contain p-4"
-                        />
-                      </div>
-                    </div>
-                  </div>
-                )}
-
                 {isLoading && (
                   <div className="mt-6 p-5 bg-gradient-to-r from-blue-50 to-indigo-50 rounded-2xl text-center border border-blue-200 animate-pulse">
                     <div className="flex justify-center gap-2 mb-3">
@@ -649,10 +636,13 @@ export default function DocumentExtractor() {
                   </div>
                 )}
 
-                {selectedImage && !isLoading && (
-                  <div className="mt-6 space-y-3 animate-in fade-in duration-500">
-                    {!hasExtracted ? (
-                      <div className="space-y-3">
+                {selectedFile && !isLoading && !selectedImage && !hasExtracted && (
+                  <div className="mt-6 p-5 bg-gradient-to-r from-yellow-50 to-orange-50 rounded-2xl text-center border border-yellow-200 animate-in fade-in duration-300">
+                    <div className="space-y-3">
+                      <p className="text-sm text-yellow-700 font-semibold">
+                        Document ready to process. Click below to extract information...
+                      </p>
+                      <div className="flex flex-col gap-3">
                         <button
                           onClick={handleProcessImage}
                           className="w-full px-6 py-3 bg-gradient-to-r from-blue-500 via-blue-600 to-indigo-600 text-white rounded-xl hover:from-blue-600 hover:via-blue-700 hover:to-indigo-700 transition-all duration-300 text-sm font-bold shadow-lg hover:shadow-xl hover:scale-105 active:scale-95 flex items-center justify-center gap-2 group"
@@ -672,6 +662,45 @@ export default function DocumentExtractor() {
                           </svg>
                           Extract Information
                         </button>
+                        <button
+                          onClick={handleReset}
+                          className="w-full px-6 py-3 bg-gradient-to-r from-gray-200 to-gray-300 text-gray-800 rounded-xl hover:from-gray-300 hover:to-gray-400 transition-all duration-300 text-sm font-semibold shadow-md hover:shadow-lg active:scale-95"
+                        >
+                          Clear
+                        </button>
+                      </div>
+                    </div>
+                  </div>
+                )}
+
+                {selectedImage && !isLoading && (
+                  <div className="mt-6 space-y-3 animate-in fade-in duration-500">
+                    <div className="flex items-center justify-between">
+                      <p className="text-xs font-bold text-gray-700 uppercase tracking-widest">
+                        Document Preview
+                      </p>
+                      <span className="px-2 py-1 bg-blue-100 text-blue-700 text-xs font-semibold rounded-full">
+                        {hasExtracted ? 'Extracted' : 'Processing Complete'}
+                      </span>
+                    </div>
+                    <div className="relative group">
+                      <div className="absolute inset-0 bg-gradient-to-r from-blue-500 to-indigo-500 rounded-2xl blur opacity-20 group-hover:opacity-30 transition-opacity duration-300"></div>
+                      <div className="relative w-full h-48 bg-gradient-to-br from-gray-50 to-gray-100 rounded-2xl overflow-hidden border border-gray-200 shadow-lg">
+                        <Image
+                          src={selectedImage}
+                          alt="Document preview"
+                          fill
+                          className="object-contain p-4"
+                        />
+                      </div>
+                    </div>
+                  </div>
+                )}
+
+                {selectedImage && !isLoading && (
+                  <div className="mt-6 space-y-3 animate-in fade-in duration-500">
+                    {!hasExtracted ? (
+                      <div className="space-y-3">
                         <button
                           onClick={handleReset}
                           className="w-full px-6 py-3 bg-gradient-to-r from-gray-200 to-gray-300 text-gray-800 rounded-xl hover:from-gray-300 hover:to-gray-400 transition-all duration-300 text-sm font-semibold shadow-md hover:shadow-lg active:scale-95"
@@ -730,7 +759,7 @@ export default function DocumentExtractor() {
 
           {/* Claim Form */}
           <div>
-            {hasExtracted || selectedImage ? (
+            {hasExtracted ? (
               <div className="bg-white rounded-2xl shadow-xl border border-gray-100 overflow-hidden animate-fadeIn">
                 <div className="bg-gradient-to-r from-blue-600 to-indigo-600 p-6 border-b border-gray-200 flex items-center justify-between">
                   <div className="flex items-center gap-3">
