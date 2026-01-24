@@ -2,6 +2,7 @@
 
 import { useState, useRef } from "react";
 import Image from "next/image";
+import { extractImageFromPDF, blobToFile } from "../utils/pdf-extractor";
 
 interface ClaimFormData {
   // Claimant Information
@@ -115,6 +116,7 @@ export default function DocumentExtractor() {
   const [isEditMode, setIsEditMode] = useState(false);
   const [extractionTime, setExtractionTime] = useState<number | null>(null);
   const [uploadMode, setUploadMode] = useState<'image' | 'pdf'>('image');
+  const [pdfExtractionMethod, setPdfExtractionMethod] = useState<'raw' | 'canvas' | null>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
   const startTimeRef = useRef<number | null>(null);
 
@@ -282,8 +284,10 @@ export default function DocumentExtractor() {
       return;
     }
 
-    if (file.size > 5 * 1024 * 1024) {
-      setError("File size must be less than 5MB");
+    // Different size limits for images (5MB) and PDFs (20MB)
+    const maxSizeMB = uploadMode === 'pdf' ? 20 : 5;
+    if (file.size > maxSizeMB * 1024 * 1024) {
+      setError(`File size must be less than ${maxSizeMB}MB`);
       input.value = "";
       return;
     }
@@ -307,9 +311,32 @@ export default function DocumentExtractor() {
     // Record start time
     startTimeRef.current = Date.now();
     setExtractionTime(null);
+    setPdfExtractionMethod(null);
 
     try {
-      const extractedData = await extractTextFromImage(selectedFile);
+      let fileToProcess = selectedFile;
+
+      // If PDF mode, extract image from PDF first
+      if (uploadMode === 'pdf') {
+        setIsLoading(true);
+        try {
+          const pdfResult = await extractImageFromPDF(selectedFile);
+          setPdfExtractionMethod(pdfResult.method);
+          console.log(`PDF extraction method: ${pdfResult.method}, dimensions: ${pdfResult.width}x${pdfResult.height}`);
+          
+          // Convert the extracted image blob to a File for OCR
+          fileToProcess = blobToFile(pdfResult.imageBlob, 'extracted-image.png');
+        } catch (pdfErr) {
+          // Handle PDF-specific errors
+          if (typeof pdfErr === 'object' && pdfErr !== null && 'code' in pdfErr) {
+            const pdfError = pdfErr as { code: string; message: string };
+            throw new Error(`PDF Error: ${pdfError.message}`);
+          }
+          throw new Error("Failed to extract image from PDF. Please try a different file or use an image directly.");
+        }
+      }
+
+      const extractedData = await extractTextFromImage(fileToProcess);
 
       // Calculate elapsed time
       if (startTimeRef.current) {
@@ -323,10 +350,11 @@ export default function DocumentExtractor() {
       }
     } catch (err) {
       setError(
-        err instanceof Error ? err.message : "Failed to extract text from image"
+        err instanceof Error ? err.message : "Failed to extract text from document"
       );
       setFormData(INITIAL_FORM_DATA);
       setHasExtracted(false);
+      setPdfExtractionMethod(null);
       if (fileInputRef.current) {
         fileInputRef.current.value = "";
       }
@@ -348,6 +376,7 @@ export default function DocumentExtractor() {
     setHasExtracted(false);
     setIsEditMode(false);
     setExtractionTime(null);
+    setPdfExtractionMethod(null);
     startTimeRef.current = null;
     if (fileInputRef.current) {
       fileInputRef.current.value = "";
@@ -455,7 +484,13 @@ export default function DocumentExtractor() {
                   {/* Upload Mode Toggle */}
                   <div className="flex items-center gap-2 bg-white/10 backdrop-blur-sm rounded-lg p-1">
                     <button
-                      onClick={() => setUploadMode('image')}
+                      onClick={() => {
+                        setUploadMode('image');
+                        setSelectedFile(null);
+                        setSelectedImage(null);
+                        setPdfExtractionMethod(null);
+                        if (fileInputRef.current) fileInputRef.current.value = '';
+                      }}
                       className={`px-3 sm:px-4 py-1.5 rounded-md text-xs sm:text-sm font-semibold transition-all duration-300 ${
                         uploadMode === 'image'
                           ? 'bg-white text-red-600 shadow-lg'
@@ -465,7 +500,13 @@ export default function DocumentExtractor() {
                       Image
                     </button>
                     <button
-                      onClick={() => setUploadMode('pdf')}
+                      onClick={() => {
+                        setUploadMode('pdf');
+                        setSelectedFile(null);
+                        setSelectedImage(null);
+                        setPdfExtractionMethod(null);
+                        if (fileInputRef.current) fileInputRef.current.value = '';
+                      }}
                       className={`px-3 sm:px-4 py-1.5 rounded-md text-xs sm:text-sm font-semibold transition-all duration-300 ${
                         uploadMode === 'pdf'
                           ? 'bg-white text-red-600 shadow-lg'
