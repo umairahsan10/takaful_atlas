@@ -759,7 +759,7 @@ export default function DocumentExtractor() {
 
           {/* Claim Form */}
           <div>
-            {hasExtracted ? (
+            {hasExtracted || selectedImage ? (
               <div className="bg-white rounded-2xl shadow-xl border border-gray-100 overflow-hidden animate-fadeIn">
                 <div className="bg-gradient-to-r from-blue-600 to-indigo-600 p-6 border-b border-gray-200 flex items-center justify-between">
                   <div className="flex items-center gap-3">
