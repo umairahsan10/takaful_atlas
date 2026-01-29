@@ -1,6 +1,6 @@
-'use client';
+"use client";
 
-import Link from 'next/link';
+import Link from "next/link";
 
 export default function Home() {
   return (
@@ -51,7 +51,9 @@ export default function Home() {
             Extraction at Scale
           </h1>
           <p className="text-lg sm:text-xl text-gray-600 mb-8 max-w-2xl mx-auto leading-relaxed">
-            Extract claim information from documents in seconds using advanced OCR technology. Automate your insurance claim processing and reduce manual data entry errors.
+            Extract claim information from documents in seconds using advanced
+            OCR technology. Automate your insurance claim processing and reduce
+            manual data entry errors.
           </p>
           <Link
             href="/claim-form"
@@ -78,11 +80,7 @@ export default function Home() {
         <div className="bg-white rounded-2xl shadow-2xl border border-gray-100 overflow-hidden mb-16">
           <div className="bg-gradient-to-r from-blue-600 to-indigo-600 px-6 sm:px-8 py-8">
             <h3 className="text-white text-xl font-bold flex items-center gap-2">
-              <svg
-                className="w-6 h-6"
-                fill="currentColor"
-                viewBox="0 0 20 20"
-              >
+              <svg className="w-6 h-6" fill="currentColor" viewBox="0 0 20 20">
                 <path d="M4 3a2 2 0 00-2 2v10a2 2 0 002 2h12a2 2 0 002-2V5a2 2 0 00-2-2H4zm12 12H4l4-8 3 6 2-4 3 6z" />
               </svg>
               How It Works
@@ -106,7 +104,9 @@ export default function Home() {
                 <div className="w-16 h-16 bg-gradient-to-br from-purple-500 to-pink-500 rounded-full flex items-center justify-center mx-auto mb-4 shadow-lg">
                   <span className="text-white font-bold text-2xl">2</span>
                 </div>
-                <h4 className="text-lg font-bold text-gray-900 mb-2">Extract</h4>
+                <h4 className="text-lg font-bold text-gray-900 mb-2">
+                  Extract
+                </h4>
                 <p className="text-gray-600">
                   Advanced OCR extracts all information automatically
                 </p>
@@ -394,11 +394,7 @@ export default function Home() {
           href="/claim-form"
           className="inline-flex items-center gap-3 px-8 py-4 bg-gradient-to-r from-red-500 to-orange-500 text-white rounded-xl hover:from-red-600 hover:to-orange-600 transition-all duration-200 font-semibold shadow-lg hover:shadow-xl text-lg"
         >
-          <svg
-            className="w-5 h-5"
-            fill="currentColor"
-            viewBox="0 0 20 20"
-          >
+          <svg className="w-5 h-5" fill="currentColor" viewBox="0 0 20 20">
             <path d="M4 3a2 2 0 00-2 2v10a2 2 0 002 2h12a2 2 0 002-2V5a2 2 0 00-2-2H4zm12 12H4l4-8 3 6 2-4 3 6z" />
           </svg>
           Upload Your First Document

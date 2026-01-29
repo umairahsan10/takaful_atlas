@@ -1,7 +1,6 @@
 "use client";
 
 import { useState, useRef } from "react";
-import Image from "next/image";
 import { extractImageFromPDF, blobToFile } from "../utils/pdf-extractor";
 
 interface ClaimFormData {
@@ -75,39 +74,9 @@ const INITIAL_FORM_DATA: ClaimFormData = {
   payable_to_employer: "",
 };
 
-const FIELD_MAPPING: Record<string, keyof ClaimFormData> = {
-  "claimant name": "claimantName",
-  "employee id": "employeeId",
-  "employee cnic": "employeeCNIC",
-  "participant (employer) name": "participantEmployerName",
-  "plan number": "planNumber",
-  "patient's name": "patientName",
-  "patient's gender": "patientGender",
-  "patient's takaful certificate number": "patientTakafulCertificateNumber",
-  "patient's date of birth": "patientDateOfBirth",
-  "patient's cnic": "patientCNIC",
-  "patient's relationship": "patientRelationship",
-  mobile: "mobile",
-  "claim type – opd": "claimTypeOPD",
-  "claim type – hospitalization": "claimTypeHospitalization",
-  "claim type – pre/post hospitalization": "claimTypePrePostHospitalization",
-  "claim type – maternity": "claimTypeMaternity",
-  "claim type – pre/post natal": "claimTypePrePostNatal",
-  "nature of medical condition / accident / illness":
-    "natureOfMedicalCondition",
-  "symptoms / cause / duration": "symptomsOrCause",
-  "name of hospital / clinic / treatment availed": "hospitalClinicName",
-  "date of admission": "dateOfAdmission",
-  "date of discharge": "dateOfDischarge",
-  "total claim amount (pkr)": "totalClaimAmount",
-  "total number of days": "totalNumberOfDays",
-  "title of cheque": "titleOfCheque",
-  "payable to – employee": "payable_to_employee",
-  "payable to – employer": "payable_to_employer",
-};
-
 export default function DocumentExtractor() {
   const [selectedImage, setSelectedImage] = useState<string | null>(null);
+  const [selectedPdfUrl, setSelectedPdfUrl] = useState<string | null>(null);
   const [selectedFile, setSelectedFile] = useState<File | null>(null);
   const [formData, setFormData] = useState<ClaimFormData>(INITIAL_FORM_DATA);
   const [isLoading, setIsLoading] = useState(false);
@@ -115,13 +84,12 @@ export default function DocumentExtractor() {
   const [hasExtracted, setHasExtracted] = useState(false);
   const [isEditMode, setIsEditMode] = useState(false);
   const [extractionTime, setExtractionTime] = useState<number | null>(null);
-  const [uploadMode, setUploadMode] = useState<'image' | 'pdf'>('image');
-  const [pdfExtractionMethod, setPdfExtractionMethod] = useState<'raw' | 'canvas' | null>(null);
+  const [uploadMode, setUploadMode] = useState<"image" | "pdf">("pdf");
   const fileInputRef = useRef<HTMLInputElement>(null);
   const startTimeRef = useRef<number | null>(null);
 
   const extractTextFromImage = async (
-    file: File
+    file: File,
   ): Promise<Record<string, string>> => {
     setIsLoading(true);
     setError(null);
@@ -136,20 +104,30 @@ export default function DocumentExtractor() {
         {
           method: "POST",
           body: formData,
-        }
+        },
       );
 
       if (!response.ok) {
         if (response.status === 404) {
-          throw new Error("OCR Service: Endpoint not found (404). Please contact support.");
+          throw new Error(
+            "OCR Service: Endpoint not found (404). Please contact support.",
+          );
         } else if (response.status === 500) {
-          throw new Error("OCR Service: Server error (500). Please try again later.");
+          throw new Error(
+            "OCR Service: Server error (500). Please try again later.",
+          );
         } else if (response.status === 503) {
-          throw new Error("OCR Service: Service temporarily unavailable (503). Please try again later.");
+          throw new Error(
+            "OCR Service: Service temporarily unavailable (503). Please try again later.",
+          );
         } else if (response.status === 0 || response.statusText === "") {
-          throw new Error("OCR Server: Connection failed. The server may not be running. Please ensure the OCR service is started.");
+          throw new Error(
+            "OCR Server: Connection failed. The server may not be running. Please ensure the OCR service is started.",
+          );
         }
-        throw new Error(`OCR Service Error (${response.status}): ${response.statusText || "Unknown error"}`);
+        throw new Error(
+          `OCR Service Error (${response.status}): ${response.statusText || "Unknown error"}`,
+        );
       }
 
       const data = await response.json();
@@ -159,13 +137,17 @@ export default function DocumentExtractor() {
 
       // Extract the JSON from the text field
       if (!data.text) {
-        throw new Error("OCR Response: No text data received. The document may not contain extractable information.");
+        throw new Error(
+          "OCR Response: No text data received. The document may not contain extractable information.",
+        );
       }
 
       // Find the JSON block within the text (wrapped in ```json ... ```)
       const jsonMatch = data.text.match(/```json\n([\s\S]*?)\n```/);
       if (!jsonMatch || !jsonMatch[1]) {
-        throw new Error("OCR Response: Invalid data format. The extracted data could not be parsed. Please try another document.");
+        throw new Error(
+          "OCR Response: Invalid data format. The extracted data could not be parsed. Please try another document.",
+        );
       }
 
       const extractedJson = JSON.parse(jsonMatch[1]);
@@ -217,14 +199,24 @@ export default function DocumentExtractor() {
     } catch (err) {
       if (err instanceof TypeError) {
         if (err.message.includes("fetch")) {
-          throw new Error("Network Error: Could not connect to OCR server. Please ensure the server is running and try again.");
+          throw new Error(
+            "Network Error: Could not connect to OCR server. Please ensure the server is running and try again.",
+          );
         }
-        throw new Error("Network Error: Connection failed. Please check your internet connection.");
+        throw new Error(
+          "Network Error: Connection failed. Please check your internet connection.",
+        );
       }
       if (err instanceof SyntaxError) {
-        throw new Error("Data Format Error: Invalid response from OCR server. Please try again.");
+        throw new Error(
+          "Data Format Error: Invalid response from OCR server. Please try again.",
+        );
       }
-      throw err instanceof Error ? err : new Error("Unexpected Error: Failed to extract text. Please try again.");
+      throw err instanceof Error
+        ? err
+        : new Error(
+            "Unexpected Error: Failed to extract text. Please try again.",
+          );
     } finally {
       setIsLoading(false);
     }
@@ -272,20 +264,20 @@ export default function DocumentExtractor() {
     const file = input.files?.[0];
     if (!file) return;
 
-    if (uploadMode === 'image' && !file.type.startsWith("image/")) {
+    if (uploadMode === "image" && !file.type.startsWith("image/")) {
       setError("Please select an image file (PNG, JPG, JPEG)");
       input.value = "";
       return;
     }
 
-    if (uploadMode === 'pdf' && file.type !== "application/pdf") {
+    if (uploadMode === "pdf" && file.type !== "application/pdf") {
       setError("Please select a PDF file");
       input.value = "";
       return;
     }
 
     // Different size limits for images (5MB) and PDFs (20MB)
-    const maxSizeMB = uploadMode === 'pdf' ? 20 : 5;
+    const maxSizeMB = uploadMode === "pdf" ? 20 : 5;
     if (file.size > maxSizeMB * 1024 * 1024) {
       setError(`File size must be less than ${maxSizeMB}MB`);
       input.value = "";
@@ -294,6 +286,17 @@ export default function DocumentExtractor() {
 
     // Store the file for later processing - don't change layout yet
     setSelectedFile(file);
+    if (uploadMode === "pdf") {
+      if (selectedPdfUrl) {
+        URL.revokeObjectURL(selectedPdfUrl);
+      }
+      setSelectedPdfUrl(URL.createObjectURL(file));
+    } else {
+      if (selectedPdfUrl) {
+        URL.revokeObjectURL(selectedPdfUrl);
+      }
+      setSelectedPdfUrl(null);
+    }
     setError(null);
     setHasExtracted(false);
     setExtractionTime(null);
@@ -305,22 +308,25 @@ export default function DocumentExtractor() {
     // Record start time
     startTimeRef.current = Date.now();
     setExtractionTime(null);
-    setPdfExtractionMethod(null);
     setIsLoading(true);
 
     try {
       let fileToProcess = selectedFile;
 
       // If PDF mode, extract image from PDF first
-      if (uploadMode === 'pdf') {
+      if (uploadMode === "pdf") {
         try {
           const pdfResult = await extractImageFromPDF(selectedFile);
-          setPdfExtractionMethod(pdfResult.method);
-          console.log(`PDF extraction method: ${pdfResult.method}, dimensions: ${pdfResult.width}x${pdfResult.height}`);
-          
+          console.log(
+            `PDF extraction method: ${pdfResult.method}, dimensions: ${pdfResult.width}x${pdfResult.height}`,
+          );
+
           // Convert the extracted image blob to a File for OCR
-          fileToProcess = blobToFile(pdfResult.imageBlob, 'extracted-image.png');
-          
+          fileToProcess = blobToFile(
+            pdfResult.imageBlob,
+            "extracted-image.png",
+          );
+
           // Convert the extracted image blob to a data URL for preview - AFTER successful extraction
           const reader = new FileReader();
           reader.onload = (e) => {
@@ -329,11 +335,17 @@ export default function DocumentExtractor() {
           reader.readAsDataURL(pdfResult.imageBlob);
         } catch (pdfErr) {
           // Handle PDF-specific errors
-          if (typeof pdfErr === 'object' && pdfErr !== null && 'code' in pdfErr) {
+          if (
+            typeof pdfErr === "object" &&
+            pdfErr !== null &&
+            "code" in pdfErr
+          ) {
             const pdfError = pdfErr as { code: string; message: string };
             throw new Error(`PDF Error: ${pdfError.message}`);
           }
-          throw new Error("Failed to extract image from PDF. Please try a different file or use an image directly.");
+          throw new Error(
+            "Failed to extract image from PDF. Please try a different file or use an image directly.",
+          );
         }
       } else {
         // For images, show preview after reading - AFTER starting extraction
@@ -358,12 +370,17 @@ export default function DocumentExtractor() {
       }
     } catch (err) {
       setError(
-        err instanceof Error ? err.message : "Failed to extract text from document"
+        err instanceof Error
+          ? err.message
+          : "Failed to extract text from document",
       );
       setFormData(INITIAL_FORM_DATA);
       setHasExtracted(false);
-      setPdfExtractionMethod(null);
       setSelectedImage(null);
+      if (selectedPdfUrl) {
+        URL.revokeObjectURL(selectedPdfUrl);
+      }
+      setSelectedPdfUrl(null);
       if (fileInputRef.current) {
         fileInputRef.current.value = "";
       }
@@ -387,8 +404,11 @@ export default function DocumentExtractor() {
     setHasExtracted(false);
     setIsEditMode(false);
     setExtractionTime(null);
-    setPdfExtractionMethod(null);
     startTimeRef.current = null;
+    if (selectedPdfUrl) {
+      URL.revokeObjectURL(selectedPdfUrl);
+    }
+    setSelectedPdfUrl(null);
     if (fileInputRef.current) {
       fileInputRef.current.value = "";
     }
@@ -396,12 +416,6 @@ export default function DocumentExtractor() {
 
   const handleEditMode = () => {
     setIsEditMode(!isEditMode);
-  };
-
-  const handleUpload = async () => {
-    console.log("Uploading form data to DB:", formData);
-    // TODO: Add API call to save the claim to database
-    setIsEditMode(false);
   };
 
   return (
@@ -488,40 +502,46 @@ export default function DocumentExtractor() {
                       </svg>
                     </div>
                     <div>
-                      <h2 className="text-xl sm:text-2xl font-bold">Upload Claim Document</h2>
-                      <p className="text-red-100 text-xs sm:text-sm mt-1">Fast & Secure extraction</p>
+                      <h2 className="text-xl sm:text-2xl font-bold">
+                        Upload Claim Document
+                      </h2>
+                      <p className="text-red-100 text-xs sm:text-sm mt-1">
+                        Fast & Secure extraction
+                      </p>
                     </div>
                   </div>
                   {/* Upload Mode Toggle */}
                   <div className="flex items-center gap-2 bg-white/10 backdrop-blur-sm rounded-lg p-1">
+                    {/*
                     <button
                       onClick={() => {
-                        setUploadMode('image');
+                        setUploadMode("image");
                         setSelectedFile(null);
                         setSelectedImage(null);
-                        setPdfExtractionMethod(null);
-                        if (fileInputRef.current) fileInputRef.current.value = '';
+                        if (fileInputRef.current)
+                          fileInputRef.current.value = "";
                       }}
                       className={`px-3 sm:px-4 py-1.5 rounded-md text-xs sm:text-sm font-semibold transition-all duration-300 ${
-                        uploadMode === 'image'
-                          ? 'bg-white text-red-600 shadow-lg'
-                          : 'text-white/70 hover:text-white'
+                        uploadMode === "image"
+                          ? "bg-white text-red-600 shadow-lg"
+                          : "text-white/70 hover:text-white"
                       }`}
                     >
                       Image
                     </button>
+                    */}
                     <button
                       onClick={() => {
-                        setUploadMode('pdf');
+                        setUploadMode("pdf");
                         setSelectedFile(null);
                         setSelectedImage(null);
-                        setPdfExtractionMethod(null);
-                        if (fileInputRef.current) fileInputRef.current.value = '';
+                        if (fileInputRef.current)
+                          fileInputRef.current.value = "";
                       }}
                       className={`px-3 sm:px-4 py-1.5 rounded-md text-xs sm:text-sm font-semibold transition-all duration-300 ${
-                        uploadMode === 'pdf'
-                          ? 'bg-white text-red-600 shadow-lg'
-                          : 'text-white/70 hover:text-white'
+                        uploadMode === "pdf"
+                          ? "bg-white text-red-600 shadow-lg"
+                          : "text-white/70 hover:text-white"
                       }`}
                     >
                       PDF
@@ -533,25 +553,34 @@ export default function DocumentExtractor() {
               <div className="p-6 sm:p-8 md:p-10 space-y-4 sm:space-y-6">
                 <div>
                   <div
-                    className="relative group cursor-pointer"
-                    onClick={() => fileInputRef.current?.click()}
+                    className={`relative group ${hasExtracted ? "cursor-default" : "cursor-pointer"}`}
+                    onClick={() => {
+                      if (!hasExtracted) {
+                        fileInputRef.current?.click();
+                      }
+                    }}
                     onKeyDown={(e) => {
-                      if (e.key === "Enter" || e.key === " ") {
+                      if (
+                        !hasExtracted &&
+                        (e.key === "Enter" || e.key === " ")
+                      ) {
                         fileInputRef.current?.click();
                       }
                     }}
                     role="button"
-                    tabIndex={0}
+                    tabIndex={hasExtracted ? -1 : 0}
                   >
                     {/* Background gradient circle */}
                     <div className="absolute inset-0 bg-gradient-to-br from-blue-500/10 to-indigo-500/10 rounded-3xl opacity-0 group-hover:opacity-100 transition-opacity duration-300 blur-xl"></div>
-                    
+
                     {/* Main upload area */}
-                    <div className={`relative border-2 transition-all duration-300 rounded-3xl p-8 sm:p-10 md:p-12 text-center ${
-                      selectedImage
-                        ? 'border-green-300 bg-green-50/50'
-                        : 'border-dashed border-gray-300 bg-gradient-to-br from-gray-50 to-gray-50/50 group-hover:border-orange-400 group-hover:bg-orange-50/30'
-                    }`}>
+                    <div
+                      className={`relative border-2 transition-all duration-300 rounded-3xl p-8 sm:p-10 md:p-12 text-center ${
+                        selectedImage
+                          ? "border-green-300 bg-green-50/50"
+                          : "border-dashed border-gray-300 bg-gradient-to-br from-gray-50 to-gray-50/50 group-hover:border-orange-400 group-hover:bg-orange-50/30"
+                      }`}
+                    >
                       {selectedImage ? (
                         <div className="space-y-3 animate-in fade-in duration-300">
                           <div className="flex justify-center">
@@ -570,10 +599,34 @@ export default function DocumentExtractor() {
                             </div>
                           </div>
                           <div>
-                            <p className="text-lg font-bold bg-gradient-to-r from-green-600 to-emerald-600 bg-clip-text text-transparent">
-                              Document Ready
+                            <p className="text-lg font-bold bg-gradient-to-r from-green-600 to-emerald-600 bg-clip-text text-transparent truncate">
+                              {selectedFile?.name || "Document"}
                             </p>
-                            <p className="text-sm text-gray-500 mt-1">Click to change or drag a new file</p>
+                            <p className="text-sm text-gray-500 mt-1">
+                              Click to change or drag a new file
+                            </p>
+                          </div>
+                        </div>
+                      ) : selectedFile ? (
+                        <div className="space-y-3 animate-in fade-in duration-300">
+                          <div className="flex justify-center">
+                            <div className="w-16 h-16 bg-gradient-to-br from-blue-400 to-indigo-500 rounded-2xl flex items-center justify-center shadow-lg">
+                              <svg
+                                className="w-8 h-8 text-white"
+                                fill="currentColor"
+                                viewBox="0 0 20 20"
+                              >
+                                <path d="M4 3a2 2 0 00-2 2v10a2 2 0 002 2h12a2 2 0 002-2V5a2 2 0 00-2-2H4z" />
+                              </svg>
+                            </div>
+                          </div>
+                          <div>
+                            <p className="text-lg font-bold bg-gradient-to-r from-blue-600 to-indigo-600 bg-clip-text text-transparent truncate">
+                              {selectedFile.name}
+                            </p>
+                            <p className="text-sm text-gray-500 mt-1">
+                              Click to change or drag a new file
+                            </p>
                           </div>
                         </div>
                       ) : (
@@ -606,7 +659,10 @@ export default function DocumentExtractor() {
                               or drag and drop your {uploadMode} here
                             </p>
                             <p className="text-xs text-gray-500 mt-3 font-medium">
-                              {uploadMode === 'image' ? 'PNG, JPG, JPEG' : 'PDF'} • Max 5MB
+                              {uploadMode === "image"
+                                ? "PNG, JPG, JPEG"
+                                : "PDF"}{" "}
+                              • Max 5MB
                             </p>
                           </div>
                         </div>
@@ -616,7 +672,9 @@ export default function DocumentExtractor() {
                   <input
                     ref={fileInputRef}
                     type="file"
-                    accept={uploadMode === 'image' ? 'image/*' : 'application/pdf'}
+                    accept={
+                      uploadMode === "image" ? "image/*" : "application/pdf"
+                    }
                     onChange={handleImageSelect}
                     className="hidden"
                     disabled={isLoading}
@@ -626,9 +684,18 @@ export default function DocumentExtractor() {
                 {isLoading && (
                   <div className="mt-6 p-5 bg-gradient-to-r from-blue-50 to-indigo-50 rounded-2xl text-center border border-blue-200 animate-pulse">
                     <div className="flex justify-center gap-2 mb-3">
-                      <div className="w-2 h-2 bg-blue-500 rounded-full animate-bounce" style={{ animationDelay: '0s' }}></div>
-                      <div className="w-2 h-2 bg-blue-500 rounded-full animate-bounce" style={{ animationDelay: '0.2s' }}></div>
-                      <div className="w-2 h-2 bg-blue-500 rounded-full animate-bounce" style={{ animationDelay: '0.4s' }}></div>
+                      <div
+                        className="w-2 h-2 bg-blue-500 rounded-full animate-bounce"
+                        style={{ animationDelay: "0s" }}
+                      ></div>
+                      <div
+                        className="w-2 h-2 bg-blue-500 rounded-full animate-bounce"
+                        style={{ animationDelay: "0.2s" }}
+                      ></div>
+                      <div
+                        className="w-2 h-2 bg-blue-500 rounded-full animate-bounce"
+                        style={{ animationDelay: "0.4s" }}
+                      ></div>
                     </div>
                     <p className="text-sm text-blue-700 font-semibold">
                       Extracting information...
@@ -636,66 +703,46 @@ export default function DocumentExtractor() {
                   </div>
                 )}
 
-                {selectedFile && !isLoading && !selectedImage && !hasExtracted && (
-                  <div className="mt-6 p-5 bg-gradient-to-r from-yellow-50 to-orange-50 rounded-2xl text-center border border-yellow-200 animate-in fade-in duration-300">
-                    <div className="space-y-3">
-                      <p className="text-sm text-yellow-700 font-semibold">
-                        Document ready to process. Click below to extract information...
-                      </p>
-                      <div className="flex flex-col gap-3">
-                        <button
-                          onClick={handleProcessImage}
-                          className="w-full px-6 py-3 bg-gradient-to-r from-blue-500 via-blue-600 to-indigo-600 text-white rounded-xl hover:from-blue-600 hover:via-blue-700 hover:to-indigo-700 transition-all duration-300 text-sm font-bold shadow-lg hover:shadow-xl hover:scale-105 active:scale-95 flex items-center justify-center gap-2 group"
-                        >
-                          <svg
-                            className="w-5 h-5 group-hover:translate-x-1 transition-transform"
-                            fill="none"
-                            stroke="currentColor"
-                            viewBox="0 0 24 24"
+                {selectedFile &&
+                  !isLoading &&
+                  !selectedImage &&
+                  !hasExtracted && (
+                    <div className="mt-6 p-5 bg-gradient-to-r from-yellow-50 to-orange-50 rounded-2xl text-center border border-yellow-200 animate-in fade-in duration-300">
+                      <div className="space-y-3">
+                        <p className="text-sm text-yellow-700 font-semibold">
+                          Document ready to process. Click below to extract
+                          information...
+                        </p>
+                        <div className="flex flex-col gap-3">
+                          <button
+                            onClick={handleProcessImage}
+                            className="w-full px-6 py-3 bg-gradient-to-r from-blue-500 via-blue-600 to-indigo-600 text-white rounded-xl hover:from-blue-600 hover:via-blue-700 hover:to-indigo-700 transition-all duration-300 text-sm font-bold shadow-lg hover:shadow-xl hover:scale-105 active:scale-95 flex items-center justify-center gap-2 group"
                           >
-                            <path
-                              strokeLinecap="round"
-                              strokeLinejoin="round"
-                              strokeWidth={2}
-                              d="M13 10V3L4 14h7v7l9-11h-7z"
-                            />
-                          </svg>
-                          Extract Information
-                        </button>
-                        <button
-                          onClick={handleReset}
-                          className="w-full px-6 py-3 bg-gradient-to-r from-gray-200 to-gray-300 text-gray-800 rounded-xl hover:from-gray-300 hover:to-gray-400 transition-all duration-300 text-sm font-semibold shadow-md hover:shadow-lg active:scale-95"
-                        >
-                          Clear
-                        </button>
+                            <svg
+                              className="w-5 h-5 group-hover:translate-x-1 transition-transform"
+                              fill="none"
+                              stroke="currentColor"
+                              viewBox="0 0 24 24"
+                            >
+                              <path
+                                strokeLinecap="round"
+                                strokeLinejoin="round"
+                                strokeWidth={2}
+                                d="M13 10V3L4 14h7v7l9-11h-7z"
+                              />
+                            </svg>
+                            Extract Information
+                          </button>
+                          <button
+                            onClick={handleReset}
+                            className="w-full px-6 py-3 bg-gradient-to-r from-gray-200 to-gray-300 text-gray-800 rounded-xl hover:from-gray-300 hover:to-gray-400 transition-all duration-300 text-sm font-semibold shadow-md hover:shadow-lg active:scale-95"
+                          >
+                            Clear
+                          </button>
+                        </div>
                       </div>
                     </div>
-                  </div>
-                )}
-
-                {selectedImage && !isLoading && (
-                  <div className="mt-6 space-y-3 animate-in fade-in duration-500">
-                    <div className="flex items-center justify-between">
-                      <p className="text-xs font-bold text-gray-700 uppercase tracking-widest">
-                        Document Preview
-                      </p>
-                      <span className="px-2 py-1 bg-blue-100 text-blue-700 text-xs font-semibold rounded-full">
-                        {hasExtracted ? 'Extracted' : 'Processing Complete'}
-                      </span>
-                    </div>
-                    <div className="relative group">
-                      <div className="absolute inset-0 bg-gradient-to-r from-blue-500 to-indigo-500 rounded-2xl blur opacity-20 group-hover:opacity-30 transition-opacity duration-300"></div>
-                      <div className="relative w-full h-48 bg-gradient-to-br from-gray-50 to-gray-100 rounded-2xl overflow-hidden border border-gray-200 shadow-lg">
-                        <Image
-                          src={selectedImage}
-                          alt="Document preview"
-                          fill
-                          className="object-contain p-4"
-                        />
-                      </div>
-                    </div>
-                  </div>
-                )}
+                  )}
 
                 {selectedImage && !isLoading && (
                   <div className="mt-6 space-y-3 animate-in fade-in duration-500">
@@ -714,7 +761,16 @@ export default function DocumentExtractor() {
                           onClick={handleReset}
                           className="w-full px-6 py-3 bg-gradient-to-r from-red-100 to-orange-100 text-red-700 rounded-xl hover:from-red-200 hover:to-orange-200 transition-all duration-300 text-sm font-semibold shadow-md hover:shadow-lg active:scale-95"
                         >
-                          Upload Different Document
+                          Clear
+                        </button>
+                        <button
+                          onClick={() => {
+                            handleReset();
+                            fileInputRef.current?.click();
+                          }}
+                          className="w-full px-6 py-3 bg-gradient-to-r from-blue-500 via-blue-600 to-indigo-600 text-white rounded-xl hover:from-blue-600 hover:via-blue-700 hover:to-indigo-700 transition-all duration-300 text-sm font-bold shadow-lg hover:shadow-xl hover:scale-105 active:scale-95"
+                        >
+                          Clear and Upload
                         </button>
 
                         {extractionTime !== null && (
@@ -759,7 +815,7 @@ export default function DocumentExtractor() {
 
           {/* Claim Form */}
           <div>
-            {hasExtracted || selectedImage ? (
+            {hasExtracted ? (
               <div className="bg-white rounded-2xl shadow-xl border border-gray-100 overflow-hidden animate-fadeIn">
                 <div className="bg-gradient-to-r from-blue-600 to-indigo-600 p-6 border-b border-gray-200 flex items-center justify-between">
                   <div className="flex items-center gap-3">
@@ -780,18 +836,21 @@ export default function DocumentExtractor() {
                         {isEditMode
                           ? "Editing..."
                           : hasExtracted
-                          ? "Extracted"
-                          : "Ready to edit"}
+                            ? "Extracted"
+                            : "Ready to edit"}
                       </p>
                     </div>
                   </div>
                   <div className="flex flex-col sm:flex-row gap-2">
                     <button
                       onClick={handleEditMode}
+                      disabled={!hasExtracted}
                       className={`px-3 sm:px-4 py-2 text-xs sm:text-sm rounded-lg transition-all duration-200 font-semibold shadow-sm hover:shadow-md flex items-center justify-center sm:justify-start gap-2 ${
-                        isEditMode
-                          ? "bg-orange-500 text-white hover:bg-orange-600"
-                          : "bg-white text-blue-600 hover:bg-blue-50"
+                        !hasExtracted
+                          ? "bg-gray-300 text-gray-600 cursor-not-allowed"
+                          : isEditMode
+                            ? "bg-orange-500 text-white hover:bg-orange-600"
+                            : "bg-white text-blue-600 hover:bg-blue-50"
                       }`}
                     >
                       <svg
@@ -803,6 +862,7 @@ export default function DocumentExtractor() {
                       </svg>
                       {isEditMode ? "Done Editing" : "Edit"}
                     </button>
+                    {/*
                     <button
                       onClick={handleUpload}
                       disabled={!isEditMode}
@@ -827,6 +887,7 @@ export default function DocumentExtractor() {
                       </svg>
                       Upload
                     </button>
+                    */}
                   </div>
                 </div>
 
@@ -899,7 +960,7 @@ export default function DocumentExtractor() {
                         </div>
                         <div>
                           <label className="block text-xs font-bold text-gray-700 uppercase tracking-wider mb-2">
-                            Patient's Gender
+                            Patient&apos;s Gender
                           </label>
                           <div className="grid grid-cols-2 gap-2">
                             <FormCheckbox
@@ -912,7 +973,7 @@ export default function DocumentExtractor() {
                                   "patientGender",
                                   formData.patientGender === "Male"
                                     ? ""
-                                    : "Male"
+                                    : "Male",
                                 )
                               }
                               disabled={!isEditMode}
@@ -929,7 +990,7 @@ export default function DocumentExtractor() {
                                   "patientGender",
                                   formData.patientGender === "Female"
                                     ? ""
-                                    : "Female"
+                                    : "Female",
                                 )
                               }
                               disabled={!isEditMode}
@@ -942,7 +1003,7 @@ export default function DocumentExtractor() {
                           onChange={(val) =>
                             handleFormChange(
                               "patientTakafulCertificateNumber",
-                              val
+                              val,
                             )
                           }
                           disabled={!isEditMode}
@@ -1010,7 +1071,7 @@ export default function DocumentExtractor() {
                           onChange={(val) =>
                             handleFormChange(
                               "claimTypePrePostHospitalization",
-                              val
+                              val,
                             )
                           }
                           disabled={!isEditMode}
@@ -1156,31 +1217,7 @@ export default function DocumentExtractor() {
                   </form>
                 </div>
               </div>
-            ) : (
-              <div className="bg-white rounded-2xl shadow-xl border-2 border-dashed border-gray-300 p-12 text-center hover:border-gray-400 transition-all duration-300">
-                <div className="w-16 h-16 bg-gradient-to-br from-gray-100 to-gray-200 rounded-full flex items-center justify-center mx-auto mb-4">
-                  <svg
-                    className="w-8 h-8 text-gray-400"
-                    fill="none"
-                    stroke="currentColor"
-                    viewBox="0 0 24 24"
-                  >
-                    <path
-                      strokeLinecap="round"
-                      strokeLinejoin="round"
-                      strokeWidth={2}
-                      d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z"
-                    />
-                  </svg>
-                </div>
-                <p className="text-gray-600 font-medium">
-                  Upload a document to get started
-                </p>
-                <p className="text-gray-500 text-sm mt-2">
-                  Select an image to extract claim information
-                </p>
-              </div>
-            )}
+            ) : null}
           </div>
         </div>
       </div>
@@ -1223,7 +1260,7 @@ function FormField({
           className={`w-full px-4 py-3 text-sm border rounded-lg resize-none transition-all duration-200 ${
             disabled
               ? "bg-gray-100 border-gray-200 text-gray-600 cursor-not-allowed"
-              : "bg-white border-gray-300 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+              : "bg-white border-gray-300 text-gray-900 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent"
           }`}
           rows={3}
           placeholder={`Enter ${label.toLowerCase()}`}
@@ -1247,7 +1284,7 @@ function FormField({
           className={`w-full px-4 py-3 text-sm border rounded-lg transition-all duration-200 ${
             disabled
               ? "bg-gray-100 border-gray-200 text-gray-600 cursor-not-allowed"
-              : "bg-white border-gray-300 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+              : "bg-white border-gray-300 text-gray-900 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent"
           }`}
           placeholder="DD-MM-YYYY"
         />
@@ -1260,7 +1297,7 @@ function FormField({
           className={`w-full px-4 py-3 text-sm border rounded-lg transition-all duration-200 ${
             disabled
               ? "bg-gray-100 border-gray-200 text-gray-600 cursor-not-allowed"
-              : "bg-white border-gray-300 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+              : "bg-white border-gray-300 text-gray-900 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent"
           }`}
           placeholder={`Enter ${label.toLowerCase()}`}
         />
@@ -1307,8 +1344,8 @@ function FormCheckbox({
             isChecked
               ? "bg-blue-500 border-blue-500"
               : disabled
-              ? "border-gray-300"
-              : "border-gray-300 hover:border-blue-400"
+                ? "border-gray-300"
+                : "border-gray-300 hover:border-blue-400"
           }`}
         >
           {isChecked && (
