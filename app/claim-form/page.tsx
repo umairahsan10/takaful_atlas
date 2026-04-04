@@ -74,6 +74,120 @@ const INITIAL_FORM_DATA: ClaimFormData = {
   payable_to_employer: "",
 };
 
+const normalizeClaimAmount = (value: string): string => {
+  const cleaned = String(value)
+    .replace(/\b(rs\.?|pkr|amount|total)\b/gi, "")
+    .replace(/,/g, "")
+    .replace(/\s+/g, "")
+    .trim();
+
+  // Remove common OCR suffix artifacts like '/-', '/=', '/1', '/2', '/I', '/l'.
+  const withoutSlashSuffixArtifact = cleaned
+    .replace(/\/\s*[-=]/g, "")
+    .replace(/\/\s*[1IiLl|2]{1,2}$/g, "");
+
+  // Keep expression symbols (e.g. 3440+2617=6057) for display accuracy.
+  return withoutSlashSuffixArtifact.replace(/[^\d+=\-.]/g, "");
+};
+
+const normalizeDateForInput = (value: string): string => {
+  const raw = String(value).trim();
+  if (!raw) return "";
+
+  const toIsoDate = (year: number, month: number, day: number): string =>
+    `${year}-${String(month).padStart(2, "0")}-${String(day).padStart(2, "0")}`;
+
+  const isValidDate = (year: number, month: number, day: number): boolean => {
+    if (month < 1 || month > 12 || day < 1) return false;
+    const maxDay = new Date(year, month, 0).getDate();
+    return day <= maxDay;
+  };
+
+  const normalized = raw.replace(/\|/g, "/");
+  const numericParts = normalized.split(/[^\d]+/).filter(Boolean);
+
+  if (!numericParts.length) {
+    return "";
+  }
+
+  let day = 0;
+  let month = 0;
+  let year = 0;
+
+  // Handle contiguous 8-digit dates (DDMMYYYY or YYYYMMDD).
+  if (numericParts.length === 1 && /^\d{8}$/.test(numericParts[0])) {
+    const token = numericParts[0];
+    const maybeYearFirst = Number(token.slice(0, 4));
+
+    if (maybeYearFirst >= 1900 && maybeYearFirst <= 2100) {
+      year = maybeYearFirst;
+      month = Number(token.slice(4, 6));
+      day = Number(token.slice(6, 8));
+    } else {
+      day = Number(token.slice(0, 2));
+      month = Number(token.slice(2, 4));
+      year = Number(token.slice(4, 8));
+    }
+  } else {
+    if (numericParts.length < 3) {
+      return "";
+    }
+
+    const first = numericParts[0];
+    const second = numericParts[1];
+    const third = numericParts.slice(2).join("");
+
+    // Support both YYYY-MM-DD and DD-MM-YYYY style OCR output.
+    if (first.length === 4) {
+      year = Number(first);
+      month = Number(second);
+      day = Number(third);
+    } else {
+      day = Number(first);
+      month = Number(second);
+      year = Number(third);
+    }
+  }
+
+  if (year < 100) {
+    year += 2000;
+  }
+
+  // Handle occasional day/month swaps from OCR.
+  if (month > 12 && day <= 12) {
+    [day, month] = [month, day];
+  }
+
+  if (isValidDate(year, month, day)) {
+    return toIsoDate(year, month, day);
+  }
+
+  const maxDay = month >= 1 && month <= 12 ? new Date(year, month, 0).getDate() : 0;
+  if (!maxDay) {
+    return "";
+  }
+
+  // Correct common one-digit OCR insertion (e.g. 31/9/2025 -> 3/9/2025).
+  const dayText = String(day);
+  if (dayText.length === 2) {
+    const dropLastDigit = Number(dayText.slice(0, 1));
+    const dropFirstDigit = Number(dayText.slice(1));
+    const candidates = [dropLastDigit, dropFirstDigit].filter(
+      (candidate, index, list) =>
+        candidate >= 1 && candidate <= maxDay && list.indexOf(candidate) === index,
+    );
+
+    if (candidates.length > 0) {
+      const correctedDay = candidates.includes(dropLastDigit)
+        ? dropLastDigit
+        : candidates[0];
+      return toIsoDate(year, month, correctedDay);
+    }
+  }
+
+  return "";
+};
+
 export default function DocumentExtractor() {
   const [selectedImage, setSelectedImage] = useState<string | null>(null);
   const [selectedPdfUrl, setSelectedPdfUrl] = useState<string | null>(null);
@@ -98,35 +212,40 @@ export default function DocumentExtractor() {
       const formData = new FormData();
       formData.append("file", file);
 
-      // Send image to external OCR endpoint
-      const response = await fetch(
-        "https://unperfidious-clemmie-unfractiously.ngrok-free.dev/ocr",
-        {
-          method: "POST",
-          body: formData,
-        },
-      );
+      // Send image to Atlas Cloud API via backend route
+      const response = await fetch("/api/extract", {
+        method: "POST",
+        body: formData,
+      });
 
       if (!response.ok) {
         if (response.status === 404) {
           throw new Error(
-            "OCR Service: Endpoint not found (404). Please contact support.",
+            "Extraction Service: Endpoint not found (404). Please contact support.",
+          );
+        } else if (response.status === 401) {
+          throw new Error(
+            "Extraction Service: Authentication failed (401). API configuration error.",
+          );
+        } else if (response.status === 429) {
+          throw new Error(
+            "Extraction Service: Rate limited (429). Please try again in a moment.",
           );
         } else if (response.status === 500) {
           throw new Error(
-            "OCR Service: Server error (500). Please try again later.",
+            "Extraction Service: Server error (500). Please try again later.",
           );
         } else if (response.status === 503) {
           throw new Error(
-            "OCR Service: Service temporarily unavailable (503). Please try again later.",
+            "Extraction Service: Service temporarily unavailable (503). Please try again later.",
           );
         } else if (response.status === 0 || response.statusText === "") {
           throw new Error(
-            "OCR Server: Connection failed. The server may not be running. Please ensure the OCR service is started.",
+            "Extraction Server: Connection failed. Please ensure the server is running.",
           );
         }
         throw new Error(
-          `OCR Service Error (${response.status}): ${response.statusText || "Unknown error"}`,
+          `Extraction Service Error (${response.status}): ${response.statusText || "Unknown error"}`,
         );
       }
 
@@ -230,24 +349,17 @@ export default function DocumentExtractor() {
       if (key in INITIAL_FORM_DATA) {
         let formattedValue = String(value);
 
-        // Convert date format from DD-MM-YYYY to YYYY-MM-DD for date input
-        if (key === "patientDateOfBirth" && value) {
-          const dateParts = value.split("-");
-          if (dateParts.length === 3) {
-            // Assuming format is DD-MM-YYYY
-            const [day, month, year] = dateParts;
-            formattedValue = `${year}-${month}-${day}`;
-          }
+        if (
+          (key === "patientDateOfBirth" ||
+            key === "dateOfAdmission" ||
+            key === "dateOfDischarge") &&
+          value
+        ) {
+          formattedValue = normalizeDateForInput(value);
         }
 
-        // Validate patient takaful certificate number - should be exactly 3 digits
-        if (key === "patientTakafulCertificateNumber" && value) {
-          const digitsOnly = value.replace(/\D/g, "");
-          if (digitsOnly.length > 3) {
-            formattedValue = "";
-          } else {
-            formattedValue = digitsOnly;
-          }
+        if (key === "totalClaimAmount" && value) {
+          formattedValue = normalizeClaimAmount(value);
         }
 
         newFormData[key as keyof ClaimFormData] = formattedValue;
@@ -1320,10 +1432,16 @@ function FormCheckbox({
   onChange,
   disabled = false,
 }: FormCheckboxProps) {
+  const normalizedValue = value?.trim().toLowerCase();
   const isChecked =
-    value?.toLowerCase() === "yes" ||
-    value?.toLowerCase() === "true" ||
-    value?.toLowerCase() === label.toLowerCase();
+    normalizedValue === "yes" ||
+    normalizedValue === "true" ||
+    normalizedValue === "checked" ||
+    normalizedValue === "ticked" ||
+    normalizedValue === "selected" ||
+    normalizedValue === "x" ||
+    normalizedValue === "1" ||
+    normalizedValue === label.toLowerCase();
 
   return (
     <div
