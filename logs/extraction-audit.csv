@@ -1,0 +1,6 @@
+timestamp,request_id,model_id,main_prompt_version,specialized_prompt_version,output_sha256,human_review_required,decision_status
+"2026-04-05T11:18:11.955Z","7de719a3-8271-4980-a262-913a804d592f","qwen/qwen3-vl-8b-instruct","2026-04-04.main.v1","2026-04-04.specialized.v1","e11149563ec0cf671b178a58c3a26ccc114094afdb1ea507adf5a74112cf4b1f","true","pending_human_review"
+"2026-04-05T11:30:39.956Z","400f31d4-e7fa-4d56-9a8e-2df98a4dd00d","qwen/qwen3-vl-8b-instruct","2026-04-04.main.v1","disabled.single-pass","52490964a0071f33fe6967722cc3968484ba0255e406202d9de34a1f4e4c209f","true","pending_human_review"
+"2026-04-05T11:32:05.842Z","5a3da8dc-de6d-4886-b8d9-6848c6475170","qwen/qwen3-vl-8b-instruct","2026-04-04.main.v1","disabled.single-pass","59ab87e09853ed803c18795f1fe376e9ac7b5116eae97339d16586467ce7c9a1","true","pending_human_review"
+"2026-04-05T11:38:02.805Z","2b8327e1-6a64-462d-ac3f-7802e4b65d3b","qwen/qwen3-vl-8b-instruct","2026-04-04.main.v1","disabled.single-pass","0a1ba38562ec74c85321b2e3cef17c193ad61df56a095a59940b61f9129ddd0e","true","pending_human_review"
+"2026-04-05T11:39:20.746Z","ed585873-30be-445a-95fa-8b4bd7809bc6","qwen/qwen3-vl-8b-instruct","2026-04-04.main.v1","disabled.single-pass","b6d67de1d6cb8b0d8f83e2670b1db4adda8eea2eedb31b2fd5ecb636b49c9afa","true","pending_human_review"

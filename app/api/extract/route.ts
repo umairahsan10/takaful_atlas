@@ -1,6 +1,12 @@
 import { NextRequest, NextResponse } from "next/server";
-import { access, appendFile, mkdir } from "fs/promises";
+import { access, appendFile, mkdir, readFile, writeFile } from "fs/promises";
+import { createHash } from "crypto";
 import { join } from "path";
+
+function parsePositiveInteger(value: string | undefined, fallbackValue: number): number {
+  const parsed = Number.parseInt(value ?? "", 10);
+  return Number.isInteger(parsed) && parsed > 0 ? parsed : fallbackValue;
+}
 
 const ATLASCLOUD_API_KEY = process.env.ATLASCLOUD_API_KEY;
 const ATLASCLOUD_API_URL = "https://api.atlascloud.ai/v1/chat/completions";
@@ -12,8 +18,21 @@ const OUTPUT_USD_PER_1M_TOKENS = 0.5;
 const COST_LOG_DIR = join(process.cwd(), "logs");
 const COST_LOG_RELATIVE_PATH = "logs/claim-costs.csv";
 const COST_LOG_PATH = join(COST_LOG_DIR, "claim-costs.csv");
+const EXTRACTION_AUDIT_LOG_RELATIVE_PATH = "logs/extraction-audit.csv";
+const EXTRACTION_AUDIT_LOG_PATH = join(COST_LOG_DIR, "extraction-audit.csv");
 const REQUEST_TIMEOUT_MS = 90_000;
 const MAX_NETWORK_RETRIES = 2;
+const IS_PRODUCTION = process.env.NODE_ENV === "production";
+const MAIN_PROMPT_VERSION = "2026-04-04.main.v1";
+const SPECIALIZED_PROMPT_BUNDLE_VERSION = "disabled.single-pass";
+const CLAIM_COST_LOG_RETENTION_DAYS = parsePositiveInteger(
+  process.env.CLAIM_COST_LOG_RETENTION_DAYS,
+  90,
+);
+const EXTRACTION_AUDIT_LOG_RETENTION_DAYS = parsePositiveInteger(
+  process.env.EXTRACTION_AUDIT_LOG_RETENTION_DAYS,
+  365,
+);
 
 const CLAIM_TYPE_KEYS = [
   "claim_type_opd",
@@ -22,8 +41,6 @@ const CLAIM_TYPE_KEYS = [
   "claim_type_maternity",
   "claim_type_pre_post_natal",
 ] as const;
-
-const NAME_KEYS = ["claimant_name", "patient_name"] as const;
 
 const RETRYABLE_NETWORK_CODES = new Set([
   "ECONNRESET",
@@ -71,7 +88,7 @@ type AtlasVisionResult = {
 
 type ClaimCostLogEntry = {
   timestamp: string;
-  claimFileName: string;
+  requestId: string;
   modelId: string;
   inputTokens: number;
   outputTokens: number;
@@ -79,6 +96,17 @@ type ClaimCostLogEntry = {
   inputAmountUsd: number;
   outputAmountUsd: number;
   totalAmountUsd: number;
+};
+
+type ExtractionAuditLogEntry = {
+  timestamp: string;
+  requestId: string;
+  modelId: string;
+  mainPromptVersion: string;
+  specializedPromptVersion: string;
+  extractionOutputSha256: string;
+  humanReviewRequired: boolean;
+  decisionStatus: "pending_human_review";
 };
 
 interface AtlasResponse {
@@ -204,28 +232,68 @@ function parseUsage(usage: AtlasUsage | undefined): TokenUsage {
   };
 }
 
-function sumUsage(usages: TokenUsage[]): TokenUsage {
-  let inputTokens = 0;
-  let outputTokens = 0;
-
-  for (const usage of usages) {
-    inputTokens += usage.inputTokens;
-    outputTokens += usage.outputTokens;
-  }
-
-  return {
-    inputTokens,
-    outputTokens,
-    totalTokens: inputTokens + outputTokens,
-  };
-}
-
 function tokenCostUsd(tokens: number, usdPer1M: number): number {
   return Number(((tokens / 1_000_000) * usdPer1M).toFixed(8));
 }
 
 function escapeCsvValue(value: string): string {
   return `"${value.replace(/"/g, '""')}"`;
+}
+
+function parseCsvFirstColumn(line: string): string {
+  const firstCommaIndex = line.indexOf(",");
+  const firstColumn = firstCommaIndex === -1 ? line : line.slice(0, firstCommaIndex);
+  const trimmed = firstColumn.trim();
+
+  if (trimmed.startsWith('"') && trimmed.endsWith('"')) {
+    return trimmed.slice(1, -1).replace(/""/g, '"');
+  }
+
+  return trimmed;
+}
+
+function isWithinRetentionWindow(isoTimestamp: string, retentionDays: number): boolean {
+  const parsedTime = Date.parse(isoTimestamp);
+  if (!Number.isFinite(parsedTime)) {
+    return false;
+  }
+
+  const cutoffTime = Date.now() - retentionDays * 24 * 60 * 60 * 1000;
+  return parsedTime >= cutoffTime;
+}
+
+async function applyCsvRetention(filePath: string, retentionDays: number): Promise<void> {
+  if (retentionDays <= 0) {
+    return;
+  }
+
+  let existingContent = "";
+
+  try {
+    existingContent = await readFile(filePath, "utf8");
+  } catch {
+    return;
+  }
+
+  const lines = existingContent.split(/\r?\n/).filter((line) => line.trim().length > 0);
+  if (lines.length === 0) {
+    return;
+  }
+
+  const [header, ...rows] = lines;
+  const retainedRows = rows.filter((row) => {
+    const timestamp = parseCsvFirstColumn(row);
+    return isWithinRetentionWindow(timestamp, retentionDays);
+  });
+
+  const nextContent = `${[header, ...retainedRows].join("\n")}\n`;
+  if (nextContent !== existingContent) {
+    await writeFile(filePath, nextContent, "utf8");
+  }
+}
+
+function hashExtractionOutput(payload: Record<string, unknown>): string {
+  return createHash("sha256").update(JSON.stringify(payload)).digest("hex");
 }
 
 async function appendClaimCostLog(entry: ClaimCostLogEntry): Promise<void> {
@@ -235,13 +303,15 @@ async function appendClaimCostLog(entry: ClaimCostLogEntry): Promise<void> {
     await access(COST_LOG_PATH);
   } catch {
     const header =
-      "timestamp,claim_file_name,model_id,input_tokens,output_tokens,total_tokens,input_cost_usd,output_cost_usd,total_cost_usd\n";
+      "timestamp,request_id,model_id,input_tokens,output_tokens,total_tokens,input_cost_usd,output_cost_usd,total_cost_usd\n";
     await appendFile(COST_LOG_PATH, header, "utf8");
   }
 
+  await applyCsvRetention(COST_LOG_PATH, CLAIM_COST_LOG_RETENTION_DAYS);
+
   const csvRow = [
     entry.timestamp,
-    entry.claimFileName,
+    entry.requestId,
     entry.modelId,
     String(entry.inputTokens),
     String(entry.outputTokens),
@@ -254,6 +324,35 @@ async function appendClaimCostLog(entry: ClaimCostLogEntry): Promise<void> {
     .join(",");
 
   await appendFile(COST_LOG_PATH, `${csvRow}\n`, "utf8");
+}
+
+async function appendExtractionAuditLog(entry: ExtractionAuditLogEntry): Promise<void> {
+  await mkdir(COST_LOG_DIR, { recursive: true });
+
+  try {
+    await access(EXTRACTION_AUDIT_LOG_PATH);
+  } catch {
+    const header =
+      "timestamp,request_id,model_id,main_prompt_version,specialized_prompt_version,output_sha256,human_review_required,decision_status\n";
+    await appendFile(EXTRACTION_AUDIT_LOG_PATH, header, "utf8");
+  }
+
+  await applyCsvRetention(EXTRACTION_AUDIT_LOG_PATH, EXTRACTION_AUDIT_LOG_RETENTION_DAYS);
+
+  const csvRow = [
+    entry.timestamp,
+    entry.requestId,
+    entry.modelId,
+    entry.mainPromptVersion,
+    entry.specializedPromptVersion,
+    entry.extractionOutputSha256,
+    String(entry.humanReviewRequired),
+    entry.decisionStatus,
+  ]
+    .map(escapeCsvValue)
+    .join(",");
+
+  await appendFile(EXTRACTION_AUDIT_LOG_PATH, `${csvRow}\n`, "utf8");
 }
 
 function extractJsonObject(text: string): Record<string, unknown> | null {
@@ -400,10 +499,17 @@ async function callAtlasVision(
 }
 
 export async function POST(request: NextRequest) {
+  const requestId = crypto.randomUUID();
+
   try {
     if (!ATLASCLOUD_API_KEY) {
       return NextResponse.json(
-        { error: "Atlas Cloud API key not configured" },
+        {
+          error: IS_PRODUCTION
+            ? "Extraction service is temporarily unavailable."
+            : "Atlas Cloud API key not configured",
+          request_id: requestId,
+        },
         { status: 500 },
       );
     }
@@ -412,10 +518,11 @@ export async function POST(request: NextRequest) {
     const file = formData.get("file") as File;
 
     if (!file) {
-      return NextResponse.json({ error: "No file provided" }, { status: 400 });
+      return NextResponse.json(
+        { error: "No file provided", request_id: requestId },
+        { status: 400 },
+      );
     }
-
-    const claimFileName = sanitizeText(file.name || "unknown");
 
     const buffer = await file.arrayBuffer();
     const base64 = Buffer.from(buffer).toString("base64");
@@ -459,79 +566,10 @@ Return JSON with these snake_case keys (include only fields that are visible/cle
 
     if (!mainJson) {
       return NextResponse.json(
-        { error: "Model response was not valid JSON", raw: mainResult.content },
+        { error: "Model response was not valid JSON", request_id: requestId },
         { status: 500 },
       );
     }
-
-    const [amountResult, clinicResult, claimTypesResult, namesResult] = await Promise.allSettled([
-      callAtlasVision(
-        base64,
-        mimeType,
-        `Extract ONLY the total claim amount value from this document.
-Return ONLY JSON:
-{"total_claim_amount_pkr_raw":""}
-Rules:
-- Copy exactly as written on the form.
-- Preserve arithmetic symbols like '+' and '=' if present.
-- Do not treat trailing slash suffixes (e.g. '/-', '/=', '/1', '/2') as part of numeric amount.
-- Do not guess any missing digits.
-- If not visible, return an empty string.`,
-        120,
-        0,
-      ),
-      callAtlasVision(
-        base64,
-        mimeType,
-        `Extract ONLY hospital or clinic name from this document.
-Return ONLY JSON:
-{"hospital_or_clinic_name":""}
-Rules:
-- Preserve exact spelling from the form.
-- Do NOT autocorrect.
-- Do not add titles, prefixes, or suffixes.
-- If not clearly visible, return empty string.`,
-        120,
-        0,
-      ),
-      callAtlasVision(
-        base64,
-        mimeType,
-        `Extract ONLY the claim type checkbox status from this form.
-Return ONLY JSON with boolean values:
-{
-  "claim_type_opd": false,
-  "claim_type_hospitalization": false,
-  "claim_type_pre_post_hospitalization": false,
-  "claim_type_maternity": false,
-  "claim_type_pre_post_natal": false
-}
-Rules:
-- Mark true only when checkbox is clearly checked/ticked/marked.
-- Multiple claim types may be true at the same time.
-- If uncertain, return false for that field.
-- Do not return any keys beyond the five listed.`,
-        200,
-        0,
-      ),
-      callAtlasVision(
-        base64,
-        mimeType,
-        `Extract ONLY these two person names from the form and return strict JSON:
-{
-  "claimant_name": "",
-  "patient_name": ""
-}
-Rules:
-- Copy the handwritten spelling exactly as written in the form.
-- Do NOT autocorrect, normalize, infer, or guess names.
-- Preserve spacing between name parts.
-- If a name is unclear, return empty string for that field.
-- Return only the two keys above.`,
-        180,
-        0,
-      ),
-    ]);
 
     const merged = { ...mainJson };
 
@@ -541,84 +579,63 @@ Rules:
       }
     }
 
-    if (amountResult.status === "fulfilled") {
-      const amountJson = extractJsonObject(amountResult.value.content);
-      const rawAmount =
-        typeof amountJson?.total_claim_amount_pkr_raw === "string"
-          ? amountJson.total_claim_amount_pkr_raw
-          : typeof amountJson?.total_claim_amount_pkr === "string"
-            ? amountJson.total_claim_amount_pkr
-            : "";
+    const rawAmount =
+      typeof merged["total_claim_amount_pkr"] === "string"
+        ? merged["total_claim_amount_pkr"]
+        : "";
+    const normalizedAmount = normalizeAmount(rawAmount);
+    if (normalizedAmount) {
+      merged.total_claim_amount_pkr = normalizedAmount;
+    }
 
-      const normalized = normalizeAmount(rawAmount);
-      if (normalized) {
-        merged.total_claim_amount_pkr = normalized;
+    const clinicName =
+      typeof merged["hospital_or_clinic_name"] === "string"
+        ? sanitizeText(merged["hospital_or_clinic_name"])
+        : "";
+    if (clinicName.length >= 2) {
+      merged.hospital_or_clinic_name = clinicName;
+    }
+
+    for (const key of ["claimant_name", "patient_name"] as const) {
+      const nameValue = typeof merged[key] === "string" ? sanitizeText(merged[key]) : "";
+      if (nameValue.length >= 2) {
+        merged[key] = nameValue;
       }
     }
 
-    if (clinicResult.status === "fulfilled") {
-      const clinicJson = extractJsonObject(clinicResult.value.content);
-      const clinicName =
-        typeof clinicJson?.hospital_or_clinic_name === "string"
-          ? sanitizeText(clinicJson.hospital_or_clinic_name)
-          : "";
+    const usage = mainResult.usage;
+    const tokenUsageBreakdown: Array<{
+      stage: "main_extraction";
+      usage: TokenUsage;
+    }> = [{ stage: "main_extraction", usage }];
+    const perCallTokenCostBreakdown = tokenUsageBreakdown.map((entry) => {
+      const stageInputAmountUsd = tokenCostUsd(entry.usage.inputTokens, INPUT_USD_PER_1M_TOKENS);
+      const stageOutputAmountUsd = tokenCostUsd(entry.usage.outputTokens, OUTPUT_USD_PER_1M_TOKENS);
 
-      if (clinicName.length >= 2) {
-        merged.hospital_or_clinic_name = clinicName;
-      }
-    }
-
-    if (claimTypesResult.status === "fulfilled") {
-      const claimTypesJson = extractJsonObject(claimTypesResult.value.content);
-
-      if (claimTypesJson) {
-        for (const key of CLAIM_TYPE_KEYS) {
-          if (key in claimTypesJson) {
-            merged[key] = normalizeClaimTypeValue(claimTypesJson[key]);
-          }
-        }
-      }
-    }
-
-    if (namesResult.status === "fulfilled") {
-      const namesJson = extractJsonObject(namesResult.value.content);
-
-      if (namesJson) {
-        for (const key of NAME_KEYS) {
-          if (typeof namesJson[key] === "string") {
-            const nameValue = sanitizeText(namesJson[key]);
-            if (nameValue.length >= 2) {
-              merged[key] = nameValue;
-            }
-          }
-        }
-      }
-    }
-
-    const tokenUsageEntries: TokenUsage[] = [mainResult.usage];
-
-    if (amountResult.status === "fulfilled") {
-      tokenUsageEntries.push(amountResult.value.usage);
-    }
-    if (clinicResult.status === "fulfilled") {
-      tokenUsageEntries.push(clinicResult.value.usage);
-    }
-    if (claimTypesResult.status === "fulfilled") {
-      tokenUsageEntries.push(claimTypesResult.value.usage);
-    }
-    if (namesResult.status === "fulfilled") {
-      tokenUsageEntries.push(namesResult.value.usage);
-    }
-
-    const usage = sumUsage(tokenUsageEntries);
+      return {
+        stage: entry.stage,
+        tokens: {
+          input: entry.usage.inputTokens,
+          output: entry.usage.outputTokens,
+          total: entry.usage.totalTokens,
+        },
+        amount_usd: {
+          input: stageInputAmountUsd,
+          output: stageOutputAmountUsd,
+          total: Number((stageInputAmountUsd + stageOutputAmountUsd).toFixed(8)),
+        },
+      };
+    });
     const inputAmountUsd = tokenCostUsd(usage.inputTokens, INPUT_USD_PER_1M_TOKENS);
     const outputAmountUsd = tokenCostUsd(usage.outputTokens, OUTPUT_USD_PER_1M_TOKENS);
     const totalAmountUsd = Number((inputAmountUsd + outputAmountUsd).toFixed(8));
+    const extractionOutputSha256 = hashExtractionOutput(merged);
+    const timestamp = new Date().toISOString();
 
     try {
       await appendClaimCostLog({
-        timestamp: new Date().toISOString(),
-        claimFileName,
+        timestamp,
+        requestId,
         modelId: MODEL_ID,
         inputTokens: usage.inputTokens,
         outputTokens: usage.outputTokens,
@@ -628,16 +645,57 @@ Rules:
         totalAmountUsd,
       });
     } catch (logError) {
-      console.warn("Failed to append claim cost log:", logError);
+      console.warn(`[extract][${requestId}] Failed to append claim cost log:`, logError);
+    }
+
+    try {
+      await appendExtractionAuditLog({
+        timestamp,
+        requestId,
+        modelId: MODEL_ID,
+        mainPromptVersion: MAIN_PROMPT_VERSION,
+        specializedPromptVersion: SPECIALIZED_PROMPT_BUNDLE_VERSION,
+        extractionOutputSha256,
+        humanReviewRequired: true,
+        decisionStatus: "pending_human_review",
+      });
+    } catch (auditLogError) {
+      console.warn(`[extract][${requestId}] Failed to append extraction audit log:`, auditLogError);
     }
 
     return NextResponse.json({
+      request_id: requestId,
       text: `\`\`\`json\n${JSON.stringify(merged, null, 2)}\n\`\`\``,
       cost_log_file: COST_LOG_RELATIVE_PATH,
+      audit_log_file: EXTRACTION_AUDIT_LOG_RELATIVE_PATH,
+      governance: {
+        human_review_required: true,
+        decision_status: "pending_human_review",
+        policy: "No final claim denial or payment decision should be made without human reviewer approval.",
+        audit_trail: {
+          request_id: requestId,
+          model_id: MODEL_ID,
+          prompt_versions: {
+            main: MAIN_PROMPT_VERSION,
+            specialized_bundle: SPECIALIZED_PROMPT_BUNDLE_VERSION,
+          },
+          extraction_output_sha256: extractionOutputSha256,
+        },
+      },
+      retention_days: {
+        cost_log: CLAIM_COST_LOG_RETENTION_DAYS,
+        extraction_audit_log: EXTRACTION_AUDIT_LOG_RETENTION_DAYS,
+      },
       token_usage: {
         model: MODEL_NAME,
         model_id: MODEL_ID,
         context_window_tokens: MODEL_CONTEXT_WINDOW_TOKENS,
+        billing_unit: "tokens",
+        billing_source: "Atlas usage.prompt_tokens/completion_tokens",
+        character_count_used_for_billing: false,
+        atlas_calls_count: tokenUsageBreakdown.length,
+        formula_usd:
+          "(input_tokens / 1_000_000 * input_rate_usd_per_1m) + (output_tokens / 1_000_000 * output_rate_usd_per_1m)",
         pricing_usd_per_1m_tokens: {
           input: INPUT_USD_PER_1M_TOKENS,
           output: OUTPUT_USD_PER_1M_TOKENS,
@@ -652,20 +710,27 @@ Rules:
           output: outputAmountUsd,
           total: totalAmountUsd,
         },
+        per_call_breakdown: perCallTokenCostBreakdown,
       },
     });
   } catch (error) {
-    console.error("Extract API error:", error);
+    console.error(`[extract][${requestId}] Extract API error:`, error);
     const networkError = isRetryableNetworkError(error);
+    const responseBody: {
+      error: string;
+      request_id: string;
+      details?: string;
+    } = {
+      error: networkError
+        ? "Temporary network issue while contacting Atlas Cloud. Please retry."
+        : "Failed to process image",
+      request_id: requestId,
+    };
 
-    return NextResponse.json(
-      {
-        error: networkError
-          ? "Temporary network issue while contacting Atlas Cloud. Please retry."
-          : "Failed to process image",
-        details: error instanceof Error ? error.message : String(error),
-      },
-      { status: networkError ? 503 : 500 },
-    );
+    if (!IS_PRODUCTION) {
+      responseBody.details = error instanceof Error ? error.message : String(error);
+    }
+
+    return NextResponse.json(responseBody, { status: networkError ? 503 : 500 });
   }
 }

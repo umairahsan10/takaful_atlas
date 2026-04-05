@@ -251,9 +251,6 @@ export default function DocumentExtractor() {
 
       const data = await response.json();
 
-      // Log the raw response
-      console.log("OCR Raw Response:", data);
-
       // Extract the JSON from the text field
       if (!data.text) {
         throw new Error(
@@ -270,7 +267,6 @@ export default function DocumentExtractor() {
       }
 
       const extractedJson = JSON.parse(jsonMatch[1]);
-      console.log("Parsed JSON:", extractedJson);
 
       // Map snake_case keys to camelCase for form fields
       const mappedData: Record<string, string> = {};
@@ -313,7 +309,6 @@ export default function DocumentExtractor() {
         }
       });
 
-      console.log("Mapped Form Data:", mappedData);
       return mappedData;
     } catch (err) {
       if (err instanceof TypeError) {
@@ -366,7 +361,6 @@ export default function DocumentExtractor() {
       }
     });
 
-    console.log("Form Data After Mapping:", newFormData);
     setFormData(newFormData);
     setHasExtracted(true);
   };
