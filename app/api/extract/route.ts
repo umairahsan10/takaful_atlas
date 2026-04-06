@@ -2,6 +2,11 @@ import { NextRequest, NextResponse } from "next/server";
 import { access, appendFile, mkdir, readFile, writeFile } from "fs/promises";
 import { createHash } from "crypto";
 import { join } from "path";
+import { auth } from "@/lib/auth";
+import { prisma } from "@/lib/db";
+import { checkExtractionQuota, incrementExtractionCount } from "@/lib/quota";
+import { writeAuditLog } from "@/lib/audit";
+import { crossCheckClaim, type ExtractedClaim } from "@/lib/cross-check";
 
 function parsePositiveInteger(value: string | undefined, fallbackValue: number): number {
   const parsed = Number.parseInt(value ?? "", 10);
@@ -16,13 +21,12 @@ const MODEL_CONTEXT_WINDOW_TOKENS = 128_000;
 const INPUT_USD_PER_1M_TOKENS = 0.08;
 const OUTPUT_USD_PER_1M_TOKENS = 0.5;
 const COST_LOG_DIR = join(process.cwd(), "logs");
-const COST_LOG_RELATIVE_PATH = "logs/claim-costs.csv";
 const COST_LOG_PATH = join(COST_LOG_DIR, "claim-costs.csv");
-const EXTRACTION_AUDIT_LOG_RELATIVE_PATH = "logs/extraction-audit.csv";
 const EXTRACTION_AUDIT_LOG_PATH = join(COST_LOG_DIR, "extraction-audit.csv");
 const REQUEST_TIMEOUT_MS = 90_000;
 const MAX_NETWORK_RETRIES = 2;
 const IS_PRODUCTION = process.env.NODE_ENV === "production";
+const LEGACY_CSV_LOGGING = process.env.LEGACY_CSV_LOGGING === "true";
 const MAIN_PROMPT_VERSION = "2026-04-04.main.v1";
 const SPECIALIZED_PROMPT_BUNDLE_VERSION = "disabled.single-pass";
 const CLAIM_COST_LOG_RETENTION_DAYS = parsePositiveInteger(
@@ -502,6 +506,49 @@ export async function POST(request: NextRequest) {
   const requestId = crypto.randomUUID();
 
   try {
+    // ── Auth check ──────────────────────────────────────────────
+    const session = await auth();
+    if (!session?.user?.id || !session?.user?.orgId) {
+      return NextResponse.json(
+        { error: "Authentication required", request_id: requestId },
+        { status: 401 },
+      );
+    }
+    const userId = session.user.id;
+    const orgId = session.user.orgId;
+
+    // ── Quota check ─────────────────────────────────────────────
+    const quota = await checkExtractionQuota(orgId);
+    if (!quota.allowed && quota.enforcement === "HARD_BLOCK") {
+      writeAuditLog({
+        orgId,
+        actorUserId: userId,
+        actionType: "QUOTA_EXCEEDED",
+        targetEntity: requestId,
+        metadata: { used: quota.used, limit: quota.limit },
+      });
+      return NextResponse.json(
+        {
+          error: "Extraction quota exceeded",
+          message: quota.message,
+          quota: { used: quota.used, limit: quota.limit, remaining: quota.remaining },
+          request_id: requestId,
+        },
+        { status: 429 },
+      );
+    }
+
+    // Log soft-warn
+    if (!quota.allowed && quota.enforcement === "SOFT_WARN") {
+      writeAuditLog({
+        orgId,
+        actorUserId: userId,
+        actionType: "QUOTA_EXCEEDED",
+        targetEntity: requestId,
+        metadata: { used: quota.used, limit: quota.limit, enforcement: "SOFT_WARN" },
+      });
+    }
+
     if (!ATLASCLOUD_API_KEY) {
       return NextResponse.json(
         {
@@ -631,43 +678,128 @@ Return JSON with these snake_case keys (include only fields that are visible/cle
     const totalAmountUsd = Number((inputAmountUsd + outputAmountUsd).toFixed(8));
     const extractionOutputSha256 = hashExtractionOutput(merged);
     const timestamp = new Date().toISOString();
+    const fileNameHash = createHash("sha256").update(file.name || "unknown").digest("hex");
+
+    // ── Legacy CSV logging (optional fallback) ──────────────────
+    if (LEGACY_CSV_LOGGING) {
+      try {
+        await appendClaimCostLog({
+          timestamp,
+          requestId,
+          modelId: MODEL_ID,
+          inputTokens: usage.inputTokens,
+          outputTokens: usage.outputTokens,
+          totalTokens: usage.totalTokens,
+          inputAmountUsd,
+          outputAmountUsd,
+          totalAmountUsd,
+        });
+      } catch (logError) {
+        console.warn(`[extract][${requestId}] Failed to append claim cost log:`, logError);
+      }
+
+      try {
+        await appendExtractionAuditLog({
+          timestamp,
+          requestId,
+          modelId: MODEL_ID,
+          mainPromptVersion: MAIN_PROMPT_VERSION,
+          specializedPromptVersion: SPECIALIZED_PROMPT_BUNDLE_VERSION,
+          extractionOutputSha256,
+          humanReviewRequired: true,
+          decisionStatus: "pending_human_review",
+        });
+      } catch (auditLogError) {
+        console.warn(`[extract][${requestId}] Failed to append extraction audit log:`, auditLogError);
+      }
+    }
+
+    // ── Cross-check against rate cards ─────────────────────────
+    let crossCheckResult = null;
+    try {
+      crossCheckResult = await crossCheckClaim(
+        merged as unknown as ExtractedClaim,
+        orgId,
+      );
+    } catch (ccErr) {
+      console.warn(`[extract][${requestId}] Cross-check failed:`, ccErr);
+    }
+
+    // ── Persist to database ────────────────────────────────────
+    try {
+      await prisma.claimExtraction.create({
+        data: {
+          requestId,
+          orgId,
+          userId,
+          fileNameHash,
+          extractedData: merged as unknown as import("@/app/generated/prisma/client").Prisma.InputJsonValue,
+          crossCheckResult: crossCheckResult
+            ? (crossCheckResult as unknown as import("@/app/generated/prisma/client").Prisma.InputJsonValue)
+            : undefined,
+          status: crossCheckResult?.discrepancyCount
+            ? "FLAGGED"
+            : "PENDING_REVIEW",
+          outputHash: extractionOutputSha256,
+          modelId: MODEL_ID,
+          promptVersion: MAIN_PROMPT_VERSION,
+        },
+      });
+    } catch (dbErr) {
+      console.warn(`[extract][${requestId}] Failed to save ClaimExtraction:`, dbErr);
+    }
 
     try {
-      await appendClaimCostLog({
-        timestamp,
-        requestId,
-        modelId: MODEL_ID,
-        inputTokens: usage.inputTokens,
-        outputTokens: usage.outputTokens,
+      await prisma.ocrUsageLog.create({
+        data: {
+          orgId,
+          userId,
+          requestId,
+          inputTokens: usage.inputTokens,
+          outputTokens: usage.outputTokens,
+          totalTokens: usage.totalTokens,
+          inputCostUsd: inputAmountUsd,
+          outputCostUsd: outputAmountUsd,
+          totalCostUsd: totalAmountUsd,
+          processingTimeMs: Date.now() - new Date(timestamp).getTime(),
+          status: "SUCCESS",
+        },
+      });
+    } catch (dbErr) {
+      console.warn(`[extract][${requestId}] Failed to save OcrUsageLog:`, dbErr);
+    }
+
+    // ── Increment quota ────────────────────────────────────────
+    try {
+      await incrementExtractionCount(orgId);
+    } catch (qErr) {
+      console.warn(`[extract][${requestId}] Failed to increment quota:`, qErr);
+    }
+
+    // ── Audit log ──────────────────────────────────────────────
+    writeAuditLog({
+      orgId,
+      actorUserId: userId,
+      actionType: "UPLOAD_CLAIM",
+      targetEntity: requestId,
+      metadata: {
+        model: MODEL_ID,
         totalTokens: usage.totalTokens,
-        inputAmountUsd,
-        outputAmountUsd,
-        totalAmountUsd,
-      });
-    } catch (logError) {
-      console.warn(`[extract][${requestId}] Failed to append claim cost log:`, logError);
-    }
-
-    try {
-      await appendExtractionAuditLog({
-        timestamp,
-        requestId,
-        modelId: MODEL_ID,
-        mainPromptVersion: MAIN_PROMPT_VERSION,
-        specializedPromptVersion: SPECIALIZED_PROMPT_BUNDLE_VERSION,
-        extractionOutputSha256,
-        humanReviewRequired: true,
-        decisionStatus: "pending_human_review",
-      });
-    } catch (auditLogError) {
-      console.warn(`[extract][${requestId}] Failed to append extraction audit log:`, auditLogError);
-    }
+        totalCostUsd: totalAmountUsd,
+        crossCheckStatus: crossCheckResult?.overallStatus || "SKIPPED",
+      },
+    });
 
     return NextResponse.json({
       request_id: requestId,
       text: `\`\`\`json\n${JSON.stringify(merged, null, 2)}\n\`\`\``,
-      cost_log_file: COST_LOG_RELATIVE_PATH,
-      audit_log_file: EXTRACTION_AUDIT_LOG_RELATIVE_PATH,
+      cross_check: crossCheckResult,
+      quota_warning: !quota.allowed ? {
+        message: quota.message,
+        used: quota.used,
+        limit: quota.limit,
+        enforcement: quota.enforcement,
+      } : null,
       governance: {
         human_review_required: true,
         decision_status: "pending_human_review",
