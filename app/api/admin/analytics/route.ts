@@ -30,6 +30,9 @@ export async function GET(req: Request) {
       startDate = new Date(now.getFullYear(), now.getMonth(), 1);
   }
 
+  // Today's start (midnight local)
+  const todayStart = new Date(now.getFullYear(), now.getMonth(), now.getDate());
+
   // Per-user usage in this org
   const users = await prisma.user.findMany({
     where: { orgId },
@@ -52,43 +55,45 @@ export async function GET(req: Request) {
         userId: user.id,
         name: user.name,
         email: user.email,
-        totalCost: usage._sum.totalCostUsd?.toNumber() ?? 0,
+        cost: usage._sum.totalCostUsd?.toNumber() ?? 0,
         totalTokens: usage._sum.totalTokens ?? 0,
-        extractionCount: usage._count,
+        extractions: usage._count,
       };
     })
   );
 
   // Org totals
-  const orgUsage = await prisma.ocrUsageLog.aggregate({
-    where: { orgId, createdAt: { gte: startDate } },
-    _sum: { totalCostUsd: true, totalTokens: true },
-    _count: true,
-    _avg: { processingTimeMs: true },
-  });
-
-  const claimStats = await prisma.claimExtraction.groupBy({
-    by: ["status"],
-    where: { orgId, createdAt: { gte: startDate } },
-    _count: true,
-  });
-
-  // Quota
-  const quota = await prisma.orgQuota.findUnique({ where: { orgId } });
+  const [orgUsage, claimStats, claimsToday, quota] = await Promise.all([
+    prisma.ocrUsageLog.aggregate({
+      where: { orgId, createdAt: { gte: startDate } },
+      _sum: { totalCostUsd: true, totalTokens: true },
+      _count: true,
+      _avg: { processingTimeMs: true },
+    }),
+    prisma.claimExtraction.groupBy({
+      by: ["status"],
+      where: { orgId, createdAt: { gte: startDate } },
+      _count: { _all: true },
+    }),
+    prisma.claimExtraction.count({
+      where: { orgId, createdAt: { gte: todayStart } },
+    }),
+    prisma.orgQuota.findUnique({ where: { orgId } }),
+  ]);
 
   return NextResponse.json({
     period,
-    org: {
-      totalCost: orgUsage._sum.totalCostUsd?.toNumber() ?? 0,
-      totalTokens: orgUsage._sum.totalTokens ?? 0,
-      totalExtractions: orgUsage._count,
-      avgProcessingTimeMs: orgUsage._avg.processingTimeMs ?? 0,
-      // eslint-disable-next-line @typescript-eslint/no-explicit-any
-      claimsByStatus: claimStats.map((s: any) => ({
-        status: s.status,
-        count: s._count,
-      })),
-    },
+    userCount: users.length,
+    totalCost: orgUsage._sum.totalCostUsd?.toNumber() ?? 0,
+    totalTokens: orgUsage._sum.totalTokens ?? 0,
+    totalExtractions: orgUsage._count,
+    avgProcessingTimeMs: orgUsage._avg.processingTimeMs ?? 0,
+    claimsToday,
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    claimsByStatus: claimStats.map((s: any) => ({
+      status: s.status,
+      _count: s._count._all,
+    })),
     maxUsers: quota?.maxUsers ?? 0,
     maxExtractions: quota?.maxExtractionsPerMonth ?? 0,
     bonusExtractions: quota?.bonusExtractions ?? 0,
@@ -96,6 +101,6 @@ export async function GET(req: Request) {
     extractionsThisMonth: quota?.currentMonthExtractions ?? 0,
     quotaResetDay: quota?.quotaResetDay ?? 1,
     lastResetAt: quota?.lastResetAt ?? null,
-    users: userStats,
+    perUserStats: userStats,
   });
 }

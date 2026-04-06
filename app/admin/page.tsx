@@ -111,7 +111,7 @@ export default function AdminDashboard() {
           },
           {
             label: "OCR Cost (Month)",
-            value: `$${(data?.totalCost || 0).toFixed(4)}`,
+            value: `$${(data?.totalCost || 0).toFixed(8)}`,
           },
           { label: "Claims Today", value: data?.claimsToday || 0 },
         ].map((card) => (
@@ -153,7 +153,7 @@ export default function AdminDashboard() {
                   </td>
                   <td className="px-5 py-3 text-slate-300">{u.extractions}</td>
                   <td className="px-5 py-3 text-slate-300">
-                    ${u.cost.toFixed(4)}
+                    ${u.cost.toFixed(8)}
                   </td>
                 </tr>
               ))

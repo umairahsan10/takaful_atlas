@@ -1,8 +1,9 @@
 "use client";
 
 import { useSession, signOut } from "next-auth/react";
-import { usePathname } from "next/navigation";
+import { usePathname, useRouter } from "next/navigation";
 import Link from "next/link";
+import { useEffect } from "react";
 
 const navItems = [
   { href: "/dashboard", label: "Dashboard", icon: "📊" },
@@ -16,8 +17,15 @@ export default function DashboardLayout({
 }: {
   children: React.ReactNode;
 }) {
-  const { data: session } = useSession();
+  const { data: session, status } = useSession();
   const pathname = usePathname();
+  const router = useRouter();
+
+  useEffect(() => {
+    if (status === "unauthenticated") {
+      router.replace("/login");
+    }
+  }, [status, router]);
 
   return (
     <div className="min-h-screen bg-slate-950 flex">

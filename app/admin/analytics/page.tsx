@@ -67,7 +67,7 @@ export default function AdminAnalyticsPage() {
         <div className="bg-slate-900 border border-slate-800 rounded-xl p-5">
           <p className="text-xs text-slate-500 mb-1">Total Cost</p>
           <p className="text-2xl font-bold text-white">
-            ${(data?.totalCost || 0).toFixed(4)}
+            ${(data?.totalCost || 0).toFixed(8)}
           </p>
         </div>
         <div className="bg-slate-900 border border-slate-800 rounded-xl p-5">
@@ -107,10 +107,10 @@ export default function AdminAnalyticsPage() {
                   </td>
                   <td className="px-5 py-3 text-slate-300">{u.extractions}</td>
                   <td className="px-5 py-3 text-slate-300">
-                    ${u.cost.toFixed(4)}
+                    ${u.cost.toFixed(8)}
                   </td>
                   <td className="px-5 py-3 text-slate-300">
-                    ${u.extractions ? (u.cost / u.extractions).toFixed(4) : "0"}
+                    ${u.extractions ? (u.cost / u.extractions).toFixed(8) : "0"}
                   </td>
                 </tr>
               ))

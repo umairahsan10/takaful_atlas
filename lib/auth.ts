@@ -20,6 +20,35 @@ export const { handlers, signIn, signOut, auth } = NextAuth({
       }
     },
   },
+  callbacks: {
+    ...authConfig.callbacks,
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    async jwt({ token, user }: any) {
+      // Initial sign-in: populate token from user object
+      if (user) {
+        token.id = user.id;
+        token.role = user.role;
+        token.orgId = user.orgId;
+        token.sessionToken = user.sessionToken;
+        return token;
+      }
+      // Every subsequent request: validate session token still matches DB
+      if (token?.id && token?.sessionToken) {
+        const dbUser = await prisma.user.findUnique({
+          where: { id: token.id as string },
+          select: { currentSessionToken: true, isActive: true },
+        });
+        if (
+          !dbUser ||
+          !dbUser.isActive ||
+          dbUser.currentSessionToken !== token.sessionToken
+        ) {
+          return null; // ← invalidates session immediately
+        }
+      }
+      return token;
+    },
+  },
   providers: [
     Credentials({
       name: "credentials",
