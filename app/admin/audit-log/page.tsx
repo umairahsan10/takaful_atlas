@@ -35,7 +35,9 @@ export default function AdminAuditLogPage() {
     fetch(`/api/admin/audit-log?${params}`, { signal: controller.signal })
       .then((r) => r.json())
       .then(setLogs)
-      .catch((e) => { if (e.name !== "AbortError") console.error(e); })
+      .catch((e) => {
+        if (e.name !== "AbortError") console.error(e);
+      })
       .finally(() => setLoading(false));
     return () => controller.abort();
   }, [actionFilter]);

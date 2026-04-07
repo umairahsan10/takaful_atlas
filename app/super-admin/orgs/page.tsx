@@ -103,7 +103,10 @@ export default function OrgsPage() {
               {error}
             </div>
           )}
-          <form onSubmit={handleCreate} className="grid grid-cols-1 md:grid-cols-2 gap-4">
+          <form
+            onSubmit={handleCreate}
+            className="grid grid-cols-1 md:grid-cols-2 gap-4"
+          >
             <div>
               <label className="block text-sm text-slate-400 mb-1">
                 Org Name
@@ -111,9 +114,7 @@ export default function OrgsPage() {
               <input
                 required
                 value={form.orgName}
-                onChange={(e) =>
-                  setForm({ ...form, orgName: e.target.value })
-                }
+                onChange={(e) => setForm({ ...form, orgName: e.target.value })}
                 className="w-full px-3 py-2 bg-slate-800 border border-slate-700 rounded-lg text-white text-sm"
                 placeholder="Pak Qatar Family Takaful"
               />
@@ -128,7 +129,9 @@ export default function OrgsPage() {
                 onChange={(e) =>
                   setForm({
                     ...form,
-                    orgSlug: e.target.value.toLowerCase().replace(/[^a-z0-9-]/g, ""),
+                    orgSlug: e.target.value
+                      .toLowerCase()
+                      .replace(/[^a-z0-9-]/g, ""),
                   })
                 }
                 className="w-full px-3 py-2 bg-slate-800 border border-slate-700 rounded-lg text-white text-sm"
@@ -326,10 +329,7 @@ export default function OrgsPage() {
                 ))}
                 {orgs.length === 0 && (
                   <tr>
-                    <td
-                      colSpan={7}
-                      className="p-8 text-center text-slate-500"
-                    >
+                    <td colSpan={7} className="p-8 text-center text-slate-500">
                       No organizations yet. Create one above.
                     </td>
                   </tr>

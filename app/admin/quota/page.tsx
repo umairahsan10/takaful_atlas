@@ -35,23 +35,35 @@ export default function AdminQuotaPage() {
   }, []);
 
   if (loading) {
-    return (
-      <div className="text-slate-400 animate-pulse">Loading quota...</div>
-    );
+    return <div className="text-slate-400 animate-pulse">Loading quota...</div>;
   }
 
   if (!quota) {
     return <div className="text-red-400">Failed to load quota</div>;
   }
 
-  const totalLimit = (quota.maxExtractionsPerMonth || 0) + (quota.bonusExtractions || 0);
-  const remaining = Math.max(0, totalLimit - (quota.currentMonthExtractions || 0));
+  const totalLimit =
+    (quota.maxExtractionsPerMonth || 0) + (quota.bonusExtractions || 0);
+  const remaining = Math.max(
+    0,
+    totalLimit - (quota.currentMonthExtractions || 0),
+  );
   const usagePercent = totalLimit
-    ? Math.min(100, Math.round(((quota.currentMonthExtractions || 0) / totalLimit) * 100))
+    ? Math.min(
+        100,
+        Math.round(((quota.currentMonthExtractions || 0) / totalLimit) * 100),
+      )
     : 0;
-  const userUsagePercent = (quota.maxUsers || 0) > 0
-    ? Math.min(100, Math.round(((quota.maxUsers - (quota.maxUsers - remaining)) / quota.maxUsers) * 100))
-    : 0;
+  const userUsagePercent =
+    (quota.maxUsers || 0) > 0
+      ? Math.min(
+          100,
+          Math.round(
+            ((quota.maxUsers - (quota.maxUsers - remaining)) / quota.maxUsers) *
+              100,
+          ),
+        )
+      : 0;
 
   const barColor = (pct: number) =>
     pct >= 90 ? "bg-red-500" : pct >= 70 ? "bg-yellow-500" : "bg-green-500";

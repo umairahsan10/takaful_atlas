@@ -6,7 +6,10 @@ import { NextResponse } from "next/server";
 
 export async function GET() {
   const session = await auth();
-  if (!session?.user || (session.user.role !== "ADMIN" && session.user.role !== "SUPER_ADMIN")) {
+  if (
+    !session?.user ||
+    (session.user.role !== "ADMIN" && session.user.role !== "SUPER_ADMIN")
+  ) {
     return NextResponse.json({ error: "Forbidden" }, { status: 403 });
   }
 
@@ -31,7 +34,7 @@ export async function GET() {
   });
 
   // Convert token to boolean — never expose the raw token to the client
-  const users = usersRaw.map((u: typeof usersRaw[0]) => ({
+  const users = usersRaw.map((u: (typeof usersRaw)[0]) => ({
     ...u,
     currentSessionToken: !!u.currentSessionToken,
   }));
@@ -61,7 +64,7 @@ export async function POST(req: Request) {
   if (!email || !password || !name) {
     return NextResponse.json(
       { error: "Missing required fields: email, password, name" },
-      { status: 400 }
+      { status: 400 },
     );
   }
 
@@ -72,14 +75,17 @@ export async function POST(req: Request) {
       {
         error: `User limit reached (${quotaCheck.used}/${quotaCheck.limit}). Contact your administrator.`,
       },
-      { status: 429 }
+      { status: 429 },
     );
   }
 
   // Check email uniqueness
   const existing = await prisma.user.findUnique({ where: { email } });
   if (existing) {
-    return NextResponse.json({ error: "Email already in use" }, { status: 409 });
+    return NextResponse.json(
+      { error: "Email already in use" },
+      { status: 409 },
+    );
   }
 
   const { hashSync } = await import("bcryptjs");
@@ -104,6 +110,6 @@ export async function POST(req: Request) {
 
   return NextResponse.json(
     { id: user.id, email: user.email, name: user.name },
-    { status: 201 }
+    { status: 201 },
   );
 }

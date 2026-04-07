@@ -15,31 +15,31 @@ const prisma = new PrismaClient({ adapter });
 
 // ── Category mapping by code prefix ──────────────────────────────
 const CATEGORY_MAP: Record<string, string> = {
-  "01-01": "Service Charges",        // OPD consultancy
+  "01-01": "Service Charges", // OPD consultancy
   "01-02": "Ward Charges",
   "02-01": "Radiology - Ultrasound",
   "03-01": "Radiology - X-Ray",
   "04-01": "Radiology - CT Scan",
-  "05-01": "Service Charges",        // ETT
-  "06-01": "Service Charges",        // Physiotherapy
-  "07-01": "Service Charges",        // Gynae surgery
-  "07-02": "Service Charges",        // ENT surgery
-  "07-03": "Service Charges",        // Ortho surgery
-  "07-04": "Service Charges",        // General surgery
-  "07-05": "Service Charges",        // Neuro surgery
-  "07-06": "Service Charges",        // Consultant visits
-  "07-07": "Service Charges",        // Nursing & pharmacy
-  "07-08": "Service Charges",        // ICU / NICU / PICU
-  "07-12": "Service Charges",        // Medical consumables
+  "05-01": "Service Charges", // ETT
+  "06-01": "Service Charges", // Physiotherapy
+  "07-01": "Service Charges", // Gynae surgery
+  "07-02": "Service Charges", // ENT surgery
+  "07-03": "Service Charges", // Ortho surgery
+  "07-04": "Service Charges", // General surgery
+  "07-05": "Service Charges", // Neuro surgery
+  "07-06": "Service Charges", // Consultant visits
+  "07-07": "Service Charges", // Nursing & pharmacy
+  "07-08": "Service Charges", // ICU / NICU / PICU
+  "07-12": "Service Charges", // Medical consumables
   "09-01": "Radiology - Doppler",
-  "10-01": "Service Charges",        // Dental
-  "11-01": "Service Charges",        // Plaster / ortho support
-  "12-01": "Service Charges",        // Dermatology
-  "13-01": "Service Charges",        // Misc procedures
-  "15-01": "Service Charges",        // Audiology
-  "210":   "Service Charges",        // Dialysis (exact code)
-  "G0":    "Laboratory",
-  "T0":    "Laboratory",
+  "10-01": "Service Charges", // Dental
+  "11-01": "Service Charges", // Plaster / ortho support
+  "12-01": "Service Charges", // Dermatology
+  "13-01": "Service Charges", // Misc procedures
+  "15-01": "Service Charges", // Audiology
+  "210": "Service Charges", // Dialysis (exact code)
+  G0: "Laboratory",
+  T0: "Laboratory",
 };
 
 function getCategory(code: string): string {
@@ -65,8 +65,15 @@ function parseCSV(text: string): string[][] {
     let inQuote = false;
     for (let i = 0; i < line.length; i++) {
       const ch = line[i];
-      if (ch === '"') { inQuote = !inQuote; continue; }
-      if (ch === "," && !inQuote) { fields.push(cur); cur = ""; continue; }
+      if (ch === '"') {
+        inQuote = !inQuote;
+        continue;
+      }
+      if (ch === "," && !inQuote) {
+        fields.push(cur);
+        cur = "";
+        continue;
+      }
       cur += ch;
     }
     fields.push(cur);
@@ -89,7 +96,9 @@ function buildEROverrideSet(dataRows: string[][]): Set<number> {
     const key = `${code.trim().toLowerCase()}|${description.trim().toLowerCase()}`;
     const revised = parseFloat(revisedRateStr ?? "");
     if (!groups.has(key)) groups.set(key, []);
-    groups.get(key)!.push({ idx, revised: isNaN(revised) ? -Infinity : revised });
+    groups
+      .get(key)!
+      .push({ idx, revised: isNaN(revised) ? -Infinity : revised });
   });
 
   const erIndices = new Set<number>();
@@ -103,15 +112,19 @@ function buildEROverrideSet(dataRows: string[][]): Set<number> {
 }
 
 async function main() {
-  const ORG_NAME    = "Pak Qatar Family Takaful";
-  const HOSPITAL    = "Chiniot General Hospital";
-  const PARTY       = "Pak Qatar Family Takaful";
-  const CSV_PATH    = path.join(__dirname, "..", "clean_rates.csv");
+  const ORG_NAME = "Pak Qatar Family Takaful";
+  const HOSPITAL = "Chiniot General Hospital";
+  const PARTY = "Pak Qatar Family Takaful";
+  const CSV_PATH = path.join(__dirname, "..", "clean_rates.csv");
 
   // ── Find org ──────────────────────────────────────────────────
-  const org = await prisma.organization.findFirst({ where: { name: ORG_NAME } });
+  const org = await prisma.organization.findFirst({
+    where: { name: ORG_NAME },
+  });
   if (!org) {
-    console.error(`❌  Organization "${ORG_NAME}" not found. Create it via the Super Admin UI first.`);
+    console.error(
+      `❌  Organization "${ORG_NAME}" not found. Create it via the Super Admin UI first.`,
+    );
     process.exit(1);
   }
   const orgId = org.id;
@@ -123,7 +136,9 @@ async function main() {
     orderBy: { createdAt: "asc" },
   });
   if (!adminUser) {
-    console.error(`❌  No active users found in org "${ORG_NAME}". Create an admin user first.`);
+    console.error(
+      `❌  No active users found in org "${ORG_NAME}". Create an admin user first.`,
+    );
     process.exit(1);
   }
   console.log(`✓  Acting as: ${adminUser.email}`);
@@ -151,7 +166,9 @@ async function main() {
 
   // ── Pre-pass: find highest-rate duplicates → Direct/ER Charges ──
   const erOverrides = buildEROverrideSet(dataRows);
-  console.log(`✓  Direct/ER Charges overrides (highest-rate duplicates): ${erOverrides.size}`);
+  console.log(
+    `✓  Direct/ER Charges overrides (highest-rate duplicates): ${erOverrides.size}`,
+  );
 
   // ── Category cache ────────────────────────────────────────────
   const categoryCache = new Map<string, string>(); // name → id
@@ -169,30 +186,42 @@ async function main() {
 
   // ── Process rows ──────────────────────────────────────────────
   let inserted = 0;
-  let skipped  = 0;
+  let skipped = 0;
   const effectiveStart = new Date();
 
   for (let i = 0; i < dataRows.length; i++) {
     const [code, description, oldRateStr, revisedRateStr] = dataRows[i];
-    if (!code?.trim() || !description?.trim()) { skipped++; continue; }
+    if (!code?.trim() || !description?.trim()) {
+      skipped++;
+      continue;
+    }
 
     const revisedRate = parseFloat(revisedRateStr ?? "");
-    const oldRate     = parseFloat(oldRateStr ?? "");
+    const oldRate = parseFloat(oldRateStr ?? "");
 
     // Skip rows with no usable rate
-    if (isNaN(revisedRate) && isNaN(oldRate)) { skipped++; continue; }
+    if (isNaN(revisedRate) && isNaN(oldRate)) {
+      skipped++;
+      continue;
+    }
 
-    const rate     = isNaN(oldRate)     ? revisedRate : oldRate;
-    const revised  = isNaN(revisedRate) ? null        : revisedRate;
+    const rate = isNaN(oldRate) ? revisedRate : oldRate;
+    const revised = isNaN(revisedRate) ? null : revisedRate;
 
     // Highest-rate duplicate → Direct/ER Charges; otherwise normal mapping
-    const categoryName = erOverrides.has(i) ? "Direct/ER Charges" : getCategory(code.trim());
-    const categoryId   = await getOrCreateCategory(categoryName);
+    const categoryName = erOverrides.has(i)
+      ? "Direct/ER Charges"
+      : getCategory(code.trim());
+    const categoryId = await getOrCreateCategory(categoryName);
 
     // Upsert Service
     const service = await prisma.service.upsert({
       where: { code_categoryId: { code: code.trim(), categoryId } },
-      create: { code: code.trim(), description: description.trim(), categoryId },
+      create: {
+        code: code.trim(),
+        description: description.trim(),
+        categoryId,
+      },
       update: { description: description.trim() },
     });
 
@@ -200,7 +229,11 @@ async function main() {
     // Since db.push may not have created the composite unique on RateCard,
     // we use findFirst + create/update pattern.
     const existing = await prisma.rateCard.findFirst({
-      where: { hospitalId: hospital.id, partyId: party.id, serviceId: service.id },
+      where: {
+        hospitalId: hospital.id,
+        partyId: party.id,
+        serviceId: service.id,
+      },
     });
 
     if (existing) {
@@ -211,22 +244,25 @@ async function main() {
     } else {
       await prisma.rateCard.create({
         data: {
-          hospitalId:          hospital.id,
-          partyId:             party.id,
-          serviceId:           service.id,
+          hospitalId: hospital.id,
+          partyId: party.id,
+          serviceId: service.id,
           rate,
-          revisedRate:         revised,
-          effectiveStartDate:  effectiveStart,
-          createdById:         adminUser.id,
+          revisedRate: revised,
+          effectiveStartDate: effectiveStart,
+          createdById: adminUser.id,
         },
       });
     }
 
     inserted++;
-    if (inserted % 100 === 0) process.stdout.write(`  … ${inserted} rows processed\n`);
+    if (inserted % 100 === 0)
+      process.stdout.write(`  … ${inserted} rows processed\n`);
   }
 
-  console.log(`\n✅  Done. Inserted/updated: ${inserted} | Skipped: ${skipped}`);
+  console.log(
+    `\n✅  Done. Inserted/updated: ${inserted} | Skipped: ${skipped}`,
+  );
 
   // ── Summary by category ───────────────────────────────────────
   console.log("\nCategory breakdown:");
@@ -237,5 +273,8 @@ async function main() {
 }
 
 main()
-  .catch((e) => { console.error("❌  Seed failed:", e); process.exit(1); })
+  .catch((e) => {
+    console.error("❌  Seed failed:", e);
+    process.exit(1);
+  })
   .finally(() => prisma.$disconnect());

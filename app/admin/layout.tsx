@@ -66,7 +66,10 @@ export default function AdminLayout({
             {session?.user?.email}
           </div>
           <button
-            onClick={async () => { await fetch("/api/auth/logout", { method: "POST" }); signOut({ redirectTo: "/login" }); }}
+            onClick={async () => {
+              await fetch("/api/auth/logout", { method: "POST" });
+              signOut({ redirectTo: "/login" });
+            }}
             className="w-full text-left text-sm text-red-400 hover:text-red-300 transition-colors"
           >
             Sign Out

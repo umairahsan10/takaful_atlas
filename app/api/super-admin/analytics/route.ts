@@ -66,7 +66,7 @@ export async function GET(req: Request) {
           ? org.quota.maxExtractionsPerMonth + org.quota.bonusExtractions
           : 0,
       };
-    })
+    }),
   );
 
   // Global totals

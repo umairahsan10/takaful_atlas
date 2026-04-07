@@ -52,7 +52,10 @@ function parseNumber(value: unknown): number | null {
   return isNaN(n) ? null : n;
 }
 
-export function parseRateCardFile(buffer: Buffer, fileName: string): ParseResult {
+export function parseRateCardFile(
+  buffer: Buffer,
+  fileName: string,
+): ParseResult {
   const ext = fileName.toLowerCase().split(".").pop();
   const workbook = XLSX.read(buffer, {
     type: "buffer",
@@ -62,7 +65,10 @@ export function parseRateCardFile(buffer: Buffer, fileName: string): ParseResult
 
   const sheetName = workbook.SheetNames[0];
   if (!sheetName) {
-    return { rows: [], errors: [{ row: 0, message: "No sheets found in file" }] };
+    return {
+      rows: [],
+      errors: [{ row: 0, message: "No sheets found in file" }],
+    };
   }
 
   const sheet = workbook.Sheets[sheetName];
@@ -111,7 +117,9 @@ export function parseRateCardFile(buffer: Buffer, fileName: string): ParseResult
     const partyName = String(get(row, "party_name") || "").trim();
     const categoryName = String(get(row, "category_name") || "").trim();
     const serviceCode = String(get(row, "service_code") || "").trim();
-    const serviceDescription = String(get(row, "service_description") || "").trim();
+    const serviceDescription = String(
+      get(row, "service_description") || "",
+    ).trim();
     const rate = parseNumber(get(row, "rate"));
     const revisedRate = parseNumber(get(row, "revised_rate"));
     const effectiveStartDate = parseDate(get(row, "effective_start_date"));
@@ -139,7 +147,8 @@ export function parseRateCardFile(buffer: Buffer, fileName: string): ParseResult
       serviceDescription,
       rate: rate!,
       revisedRate,
-      effectiveStartDate: effectiveStartDate || new Date().toISOString().split("T")[0],
+      effectiveStartDate:
+        effectiveStartDate || new Date().toISOString().split("T")[0],
       effectiveEndDate,
     });
   }

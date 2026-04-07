@@ -42,7 +42,7 @@ export default function StaffDashboard() {
   const quotaPercent = stats
     ? Math.min(
         100,
-        Math.round((stats.quotaUsed / (stats.quotaLimit || 1)) * 100)
+        Math.round((stats.quotaUsed / (stats.quotaLimit || 1)) * 100),
       )
     : 0;
 
@@ -72,9 +72,7 @@ export default function StaffDashboard() {
             <p className="text-xs text-slate-500 mb-1">{card.label}</p>
             <p
               className={`text-2xl font-bold ${
-                "accent" in card && card.accent
-                  ? "text-red-400"
-                  : "text-white"
+                "accent" in card && card.accent ? "text-red-400" : "text-white"
               }`}
             >
               {card.value}
@@ -148,8 +146,7 @@ export default function StaffDashboard() {
                     <td className="px-5 py-3">
                       <span
                         className={`text-xs px-2 py-0.5 rounded ${
-                          statusStyle[c.status] ||
-                          "bg-slate-700 text-slate-400"
+                          statusStyle[c.status] || "bg-slate-700 text-slate-400"
                         }`}
                       >
                         {c.status}

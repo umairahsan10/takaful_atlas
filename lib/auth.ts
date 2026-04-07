@@ -13,10 +13,14 @@ export const { handlers, signIn, signOut, auth } = NextAuth({
       const token = (message as { token?: { id?: string } }).token;
       const userId = token?.id;
       if (userId) {
-        await prisma.user.update({
-          where: { id: userId },
-          data: { currentSessionToken: null },
-        }).catch(() => {/* ignore if user not found */});
+        await prisma.user
+          .update({
+            where: { id: userId },
+            data: { currentSessionToken: null },
+          })
+          .catch(() => {
+            /* ignore if user not found */
+          });
       }
     },
   },
@@ -108,7 +112,7 @@ export const { handlers, signIn, signOut, auth } = NextAuth({
  */
 export async function validateSessionToken(
   userId: string,
-  sessionToken: string
+  sessionToken: string,
 ): Promise<boolean> {
   const user = await prisma.user.findUnique({
     where: { id: userId },

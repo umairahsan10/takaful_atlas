@@ -43,7 +43,7 @@ export async function GET() {
             }
           : null,
       };
-    })
+    }),
   );
 
   return NextResponse.json(orgsWithAdmin);
@@ -69,8 +69,11 @@ export async function POST(req: Request) {
 
   if (!orgName || !orgSlug || !adminEmail || !adminPassword || !adminName) {
     return NextResponse.json(
-      { error: "Missing required fields: orgName, orgSlug, adminEmail, adminPassword, adminName" },
-      { status: 400 }
+      {
+        error:
+          "Missing required fields: orgName, orgSlug, adminEmail, adminPassword, adminName",
+      },
+      { status: 400 },
     );
   }
 
@@ -81,7 +84,7 @@ export async function POST(req: Request) {
   if (existingOrg) {
     return NextResponse.json(
       { error: "Organization slug already exists" },
-      { status: 409 }
+      { status: 409 },
     );
   }
 
@@ -92,7 +95,7 @@ export async function POST(req: Request) {
   if (existingUser) {
     return NextResponse.json(
       { error: "Email already in use" },
-      { status: 409 }
+      { status: 409 },
     );
   }
 

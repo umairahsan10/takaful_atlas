@@ -13,34 +13,40 @@ export async function GET() {
   const todayStart = new Date();
   todayStart.setHours(0, 0, 0, 0);
 
-  const [totalClaims, claimsToday, pendingReview, flagged, quota, recentClaims] =
-    await Promise.all([
-      prisma.claimExtraction.count({
-        where: { userId, orgId },
-      }),
-      prisma.claimExtraction.count({
-        where: { userId, orgId, createdAt: { gte: todayStart } },
-      }),
-      prisma.claimExtraction.count({
-        where: { userId, orgId, status: "PENDING_REVIEW" },
-      }),
-      prisma.claimExtraction.count({
-        where: { userId, orgId, status: "FLAGGED" },
-      }),
-      prisma.orgQuota.findUnique({ where: { orgId } }),
-      prisma.claimExtraction.findMany({
-        where: { userId, orgId },
-        orderBy: { createdAt: "desc" },
-        take: 10,
-        select: {
-          id: true,
-          requestId: true,
-          fileNameHash: true,
-          status: true,
-          createdAt: true,
-        },
-      }),
-    ]);
+  const [
+    totalClaims,
+    claimsToday,
+    pendingReview,
+    flagged,
+    quota,
+    recentClaims,
+  ] = await Promise.all([
+    prisma.claimExtraction.count({
+      where: { userId, orgId },
+    }),
+    prisma.claimExtraction.count({
+      where: { userId, orgId, createdAt: { gte: todayStart } },
+    }),
+    prisma.claimExtraction.count({
+      where: { userId, orgId, status: "PENDING_REVIEW" },
+    }),
+    prisma.claimExtraction.count({
+      where: { userId, orgId, status: "FLAGGED" },
+    }),
+    prisma.orgQuota.findUnique({ where: { orgId } }),
+    prisma.claimExtraction.findMany({
+      where: { userId, orgId },
+      orderBy: { createdAt: "desc" },
+      take: 10,
+      select: {
+        id: true,
+        requestId: true,
+        fileNameHash: true,
+        status: true,
+        createdAt: true,
+      },
+    }),
+  ]);
 
   return NextResponse.json({
     claimsToday,

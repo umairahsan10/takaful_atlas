@@ -4,7 +4,10 @@ import { NextResponse } from "next/server";
 
 export async function GET(req: Request) {
   const session = await auth();
-  if (!session?.user || (session.user.role !== "ADMIN" && session.user.role !== "SUPER_ADMIN")) {
+  if (
+    !session?.user ||
+    (session.user.role !== "ADMIN" && session.user.role !== "SUPER_ADMIN")
+  ) {
     return NextResponse.json({ error: "Forbidden" }, { status: 403 });
   }
 
@@ -59,7 +62,7 @@ export async function GET(req: Request) {
         totalTokens: usage._sum.totalTokens ?? 0,
         extractions: usage._count,
       };
-    })
+    }),
   );
 
   // Org totals

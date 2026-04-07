@@ -77,9 +77,7 @@ export default function AdminUsersPage() {
   const atLimit = quota && quota.currentUserCount >= quota.maxUsers;
 
   if (loading) {
-    return (
-      <div className="text-slate-400 animate-pulse">Loading users...</div>
-    );
+    return <div className="text-slate-400 animate-pulse">Loading users...</div>;
   }
 
   return (
@@ -199,9 +197,7 @@ export default function AdminUsersPage() {
                   <td className="px-5 py-3">
                     <span
                       className={`w-2 h-2 rounded-full inline-block mr-2 ${
-                        u.currentSessionToken
-                          ? "bg-green-500"
-                          : "bg-slate-600"
+                        u.currentSessionToken ? "bg-green-500" : "bg-slate-600"
                       }`}
                     />
                     <span className="text-xs text-slate-400">
