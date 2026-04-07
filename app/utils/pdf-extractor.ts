@@ -7,6 +7,7 @@ if (typeof window !== "undefined") {
 
 // Constants
 const MAX_FILE_SIZE_MB = 20;
+const MAX_PAGE_COUNT = 20;
 
 export interface PDFExtractionResult {
   imageBlob: Blob;
@@ -19,6 +20,15 @@ export interface PDFExtractionResult {
 export interface PDFExtractionError {
   code: string;
   message: string;
+}
+
+export interface PDFPageImageResult {
+  pageNumber: number;
+  imageBlob: Blob;
+  width: number;
+  height: number;
+  format: string;
+  method: "canvas";
 }
 
 /**
@@ -99,6 +109,88 @@ export async function extractImageFromPDF(
     throw createError(
       "EXTRACTION_FAILED",
       "Failed to extract image from PDF. Please try a different file."
+    );
+  }
+}
+
+/**
+ * Extracts all PDF pages as image blobs using canvas rendering.
+ * Use this for multi-page bill uploads where each page is sent to OCR.
+ */
+export async function extractAllPagesFromPDF(
+  file: File
+): Promise<PDFPageImageResult[]> {
+  const fileSizeMB = file.size / (1024 * 1024);
+  if (fileSizeMB > MAX_FILE_SIZE_MB) {
+    throw createError(
+      "FILE_TOO_LARGE",
+      `PDF file is too large (${fileSizeMB.toFixed(1)}MB). Maximum allowed size is ${MAX_FILE_SIZE_MB}MB.`
+    );
+  }
+
+  if (file.type !== "application/pdf") {
+    throw createError("INVALID_FILE_TYPE", "Please select a valid PDF file.");
+  }
+
+  try {
+    const arrayBuffer = await file.arrayBuffer();
+    const pdf = await pdfjsLib.getDocument({ data: arrayBuffer }).promise;
+
+    if (pdf.numPages === 0) {
+      throw createError("EMPTY_PDF", "The PDF file is empty (no pages found).");
+    }
+
+    if (pdf.numPages > MAX_PAGE_COUNT) {
+      throw createError(
+        "TOO_MANY_PAGES",
+        `PDF has ${pdf.numPages} pages. Maximum supported pages is ${MAX_PAGE_COUNT}.`
+      );
+    }
+
+    const pages: PDFPageImageResult[] = [];
+    for (let pageNumber = 1; pageNumber <= pdf.numPages; pageNumber += 1) {
+      const page = await pdf.getPage(pageNumber);
+      const canvasResult = await extractViaCanvas(page);
+      pages.push({
+        pageNumber,
+        imageBlob: canvasResult.imageBlob,
+        width: canvasResult.width,
+        height: canvasResult.height,
+        format: canvasResult.format,
+        method: "canvas",
+      });
+    }
+
+    return pages;
+  } catch (error) {
+    if (isExtractionError(error)) {
+      throw error;
+    }
+
+    if (error instanceof Error) {
+      if (error.message.includes("Invalid PDF")) {
+        throw createError(
+          "INVALID_PDF",
+          "The file appears to be corrupted or is not a valid PDF."
+        );
+      }
+      if (error.message.includes("password")) {
+        throw createError(
+          "PASSWORD_PROTECTED",
+          "This PDF is password protected. Please provide an unprotected PDF."
+        );
+      }
+      if (error.message.includes("worker")) {
+        throw createError(
+          "WORKER_FAILED",
+          "PDF processing failed to initialize. Please refresh the page and try again."
+        );
+      }
+    }
+
+    throw createError(
+      "EXTRACTION_FAILED",
+      "Failed to extract pages from PDF. Please try a different file."
     );
   }
 }
