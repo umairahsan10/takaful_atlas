@@ -34,7 +34,12 @@ export default function StaffRateCardsPage() {
   const [importing, setImporting] = useState(false);
   const [importResult, setImportResult] = useState<{
     success: boolean;
-    summary?: { totalParsed: number; inserted: number; updated: number; failed: number };
+    summary?: {
+      totalParsed: number;
+      inserted: number;
+      updated: number;
+      failed: number;
+    };
     error?: string;
   } | null>(null);
 
@@ -65,7 +70,10 @@ export default function StaffRateCardsPage() {
     const fd = new FormData();
     fd.append("file", file);
     try {
-      const res = await fetch("/api/rate-cards/import", { method: "POST", body: fd });
+      const res = await fetch("/api/rate-cards/import", {
+        method: "POST",
+        body: fd,
+      });
       const data = await res.json();
       if (!res.ok) {
         setImportResult({ success: false, error: data.error });

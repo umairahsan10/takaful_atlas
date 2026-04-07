@@ -74,7 +74,7 @@ export default function OrgDetailPage() {
     });
     // Refresh users
     const u = await fetch(`/api/super-admin/orgs/${id}/users`).then((r) =>
-      r.json()
+      r.json(),
     );
     setUsers(u);
   };
@@ -110,7 +110,10 @@ export default function OrgDetailPage() {
             {(quota?.maxExtractionsPerMonth ?? 0) +
               (quota?.bonusExtractions ?? 0)}
           </span>
-          <span className="text-sm text-slate-400"> extractions this month</span>
+          <span className="text-sm text-slate-400">
+            {" "}
+            extractions this month
+          </span>
         </div>
         <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
           <div>
@@ -140,7 +143,10 @@ export default function OrgDetailPage() {
               onChange={(e) =>
                 setEditQuota({
                   ...editQuota,
-                  maxExtractionsPerMonth: e.target.value === "" ? 0 : Math.max(1, parseInt(e.target.value, 10) || 1),
+                  maxExtractionsPerMonth:
+                    e.target.value === ""
+                      ? 0
+                      : Math.max(1, parseInt(e.target.value, 10) || 1),
                 })
               }
               className="w-full px-3 py-2 bg-slate-800 border border-slate-700 rounded-lg text-white text-sm"

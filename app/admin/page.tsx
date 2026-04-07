@@ -41,8 +41,8 @@ export default function AdminDashboard() {
         Math.round(
           (data.extractionsThisMonth /
             (data.maxExtractions + data.bonusExtractions || 1)) *
-            100
-        )
+            100,
+        ),
       )
     : 0;
   const quotaColor =

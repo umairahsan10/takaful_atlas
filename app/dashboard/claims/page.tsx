@@ -33,7 +33,9 @@ export default function StaffClaimsPage() {
         setTotal(d.total || 0);
         setPages(d.pages || 1);
       })
-      .catch((e) => { if (e.name !== "AbortError") console.error(e); })
+      .catch((e) => {
+        if (e.name !== "AbortError") console.error(e);
+      })
       .finally(() => setLoading(false));
     return () => controller.abort();
   }, [page, status]);

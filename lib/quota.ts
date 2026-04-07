@@ -14,7 +14,7 @@ export type QuotaCheckResult = {
  * Also handles monthly reset if the reset day has passed.
  */
 export async function checkExtractionQuota(
-  orgId: string
+  orgId: string,
 ): Promise<QuotaCheckResult> {
   const quota = await prisma.orgQuota.findUnique({ where: { orgId } });
 
@@ -45,8 +45,7 @@ export async function checkExtractionQuota(
     };
   }
 
-  const totalLimit =
-    current.maxExtractionsPerMonth + current.bonusExtractions;
+  const totalLimit = current.maxExtractionsPerMonth + current.bonusExtractions;
   const used = current.currentMonthExtractions;
   const remaining = Math.max(0, totalLimit - used);
   const exceeded = used >= totalLimit;
@@ -88,7 +87,7 @@ export async function incrementExtractionCount(orgId: string): Promise<void> {
  * Check if the org can still create new users (against max_users quota).
  */
 export async function checkUserQuota(
-  orgId: string
+  orgId: string,
 ): Promise<{ allowed: boolean; used: number; limit: number }> {
   const quota = await prisma.orgQuota.findUnique({ where: { orgId } });
   if (!quota) {
@@ -113,7 +112,7 @@ export async function checkUserQuota(
 async function maybeResetMonthly(
   orgId: string,
   resetDay: number,
-  lastResetAt: Date
+  lastResetAt: Date,
 ): Promise<void> {
   const now = new Date();
   const currentDay = now.getDate();

@@ -36,7 +36,12 @@ export default function AdminRateCardsPage() {
   const [importing, setImporting] = useState(false);
   const [importResult, setImportResult] = useState<{
     success: boolean;
-    summary?: { totalParsed: number; inserted: number; updated: number; failed: number };
+    summary?: {
+      totalParsed: number;
+      inserted: number;
+      updated: number;
+      failed: number;
+    };
     errors?: { row: number; message: string }[];
     error?: string;
   } | null>(null);
@@ -72,12 +77,23 @@ export default function AdminRateCardsPage() {
     const fd = new FormData();
     fd.append("file", file);
     try {
-      const res = await fetch("/api/rate-cards/import", { method: "POST", body: fd });
+      const res = await fetch("/api/rate-cards/import", {
+        method: "POST",
+        body: fd,
+      });
       const data = await res.json();
       if (!res.ok) {
-        setImportResult({ success: false, error: data.error, errors: data.details });
+        setImportResult({
+          success: false,
+          error: data.error,
+          errors: data.details,
+        });
       } else {
-        setImportResult({ success: true, summary: data.summary, errors: data.errors });
+        setImportResult({
+          success: true,
+          summary: data.summary,
+          errors: data.errors,
+        });
         fetchCards(); // refresh table
       }
     } catch {

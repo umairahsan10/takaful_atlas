@@ -25,10 +25,13 @@ export async function POST(req: Request) {
     "application/vnd.ms-excel",
   ];
   const ext = file.name.toLowerCase().split(".").pop();
-  if (!allowedTypes.includes(file.type) && !["csv", "xlsx", "xls"].includes(ext || "")) {
+  if (
+    !allowedTypes.includes(file.type) &&
+    !["csv", "xlsx", "xls"].includes(ext || "")
+  ) {
     return NextResponse.json(
       { error: "Only CSV and Excel files are supported" },
-      { status: 400 }
+      { status: 400 },
     );
   }
 
@@ -38,7 +41,7 @@ export async function POST(req: Request) {
   if (!rows.length && errors.length) {
     return NextResponse.json(
       { error: "Parse failed", details: errors },
-      { status: 400 }
+      { status: 400 },
     );
   }
 

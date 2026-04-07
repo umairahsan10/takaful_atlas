@@ -36,7 +36,11 @@ export interface CrossCheckResult {
   totalBilled: number;
   totalExpected: number | null;
   lineResults: CrossCheckLineResult[];
-  overallStatus: "ALL_MATCH" | "DISCREPANCIES_FOUND" | "NO_RATES_FOUND" | "NO_HOSPITAL_MATCH";
+  overallStatus:
+    | "ALL_MATCH"
+    | "DISCREPANCIES_FOUND"
+    | "NO_RATES_FOUND"
+    | "NO_HOSPITAL_MATCH";
   discrepancyCount: number;
   tolerancePercent: number;
 }
@@ -54,7 +58,7 @@ const DEFAULT_TOLERANCE = 5; // 5% deviation considered acceptable
 export async function crossCheckClaim(
   extractedData: ExtractedClaim,
   orgId: string,
-  tolerancePercent: number = DEFAULT_TOLERANCE
+  tolerancePercent: number = DEFAULT_TOLERANCE,
 ): Promise<CrossCheckResult> {
   const hospitalNameFromOcr =
     extractedData.hospital_or_clinic_name?.trim() || "";
@@ -87,7 +91,10 @@ export async function crossCheckClaim(
         where: {
           orgId,
           isActive: true,
-          name: { contains: hospitalNameFromOcr.split(" ")[0], mode: "insensitive" },
+          name: {
+            contains: hospitalNameFromOcr.split(" ")[0],
+            mode: "insensitive",
+          },
         },
         select: { id: true, name: true },
         take: 5,
@@ -100,9 +107,14 @@ export async function crossCheckClaim(
         // Pick closest by substring overlap
         const scored = partials.map((h: { id: string; name: string }) => ({
           ...h,
-          score: similarity(hospitalNameFromOcr.toLowerCase(), h.name.toLowerCase()),
+          score: similarity(
+            hospitalNameFromOcr.toLowerCase(),
+            h.name.toLowerCase(),
+          ),
         }));
-        scored.sort((a: { score: number }, b: { score: number }) => b.score - a.score);
+        scored.sort(
+          (a: { score: number }, b: { score: number }) => b.score - a.score,
+        );
         if (scored[0].score > 0.3) {
           matchedHospital = scored[0];
           confidence = scored[0].score;
@@ -183,7 +195,10 @@ export async function crossCheckClaim(
       // Fallback: search by service description
       const service = await prisma.service.findFirst({
         where: {
-          description: { contains: serviceDesc.split(" ")[0], mode: "insensitive" },
+          description: {
+            contains: serviceDesc.split(" ")[0],
+            mode: "insensitive",
+          },
         },
         select: { id: true },
       });

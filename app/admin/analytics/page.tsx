@@ -22,10 +22,14 @@ export default function AdminAnalyticsPage() {
 
   useEffect(() => {
     const controller = new AbortController();
-    fetch(`/api/admin/analytics?period=${period}`, { signal: controller.signal })
+    fetch(`/api/admin/analytics?period=${period}`, {
+      signal: controller.signal,
+    })
       .then((r) => r.json())
       .then(setData)
-      .catch((e) => { if (e.name !== "AbortError") console.error(e); })
+      .catch((e) => {
+        if (e.name !== "AbortError") console.error(e);
+      })
       .finally(() => setLoading(false));
     return () => controller.abort();
   }, [period]);

@@ -94,10 +94,7 @@ export default function SuperAdminAuditLogPage() {
                 ))}
                 {logs.length === 0 && (
                   <tr>
-                    <td
-                      colSpan={5}
-                      className="p-8 text-center text-slate-500"
-                    >
+                    <td colSpan={5} className="p-8 text-center text-slate-500">
                       No audit logs found
                     </td>
                   </tr>

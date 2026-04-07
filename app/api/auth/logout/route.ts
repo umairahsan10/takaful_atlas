@@ -7,10 +7,14 @@ export async function POST() {
   const userId = session?.user?.id;
 
   if (userId) {
-    await prisma.user.update({
-      where: { id: userId },
-      data: { currentSessionToken: null },
-    }).catch(() => {/* ignore */});
+    await prisma.user
+      .update({
+        where: { id: userId },
+        data: { currentSessionToken: null },
+      })
+      .catch(() => {
+        /* ignore */
+      });
   }
 
   return NextResponse.json({ ok: true });
