@@ -127,11 +127,12 @@ async function main() {
     );
     process.exit(1);
   }
+  const orgId = org.id;
   console.log(`✓  Org: ${org.name} (${org.id})`);
 
   // ── Find a user in this org to use as createdById ─────────────
   const adminUser = await prisma.user.findFirst({
-    where: { orgId: org.id, isActive: true },
+    where: { orgId, isActive: true },
     orderBy: { createdAt: "asc" },
   });
   if (!adminUser) {
@@ -144,16 +145,16 @@ async function main() {
 
   // ── Upsert Hospital ───────────────────────────────────────────
   const hospital = await prisma.hospital.upsert({
-    where: { orgId_name: { orgId: org.id, name: HOSPITAL } },
-    create: { orgId: org.id, name: HOSPITAL },
+    where: { orgId_name: { orgId, name: HOSPITAL } },
+    create: { orgId, name: HOSPITAL },
     update: {},
   });
   console.log(`✓  Hospital: ${hospital.name}`);
 
   // ── Upsert Party ──────────────────────────────────────────────
   const party = await prisma.party.upsert({
-    where: { orgId_name: { orgId: org.id, name: PARTY } },
-    create: { orgId: org.id, name: PARTY },
+    where: { orgId_name: { orgId, name: PARTY } },
+    create: { orgId, name: PARTY },
     update: {},
   });
   console.log(`✓  Party: ${party.name}`);
@@ -175,8 +176,8 @@ async function main() {
   async function getOrCreateCategory(name: string): Promise<string> {
     if (categoryCache.has(name)) return categoryCache.get(name)!;
     const cat = await prisma.category.upsert({
-      where: { orgId_name: { orgId: org.id, name } },
-      create: { orgId: org.id, name },
+      where: { orgId_name: { orgId, name } },
+      create: { orgId, name },
       update: {},
     });
     categoryCache.set(name, cat.id);
