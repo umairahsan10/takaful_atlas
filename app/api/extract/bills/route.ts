@@ -16,6 +16,8 @@ const MAX_PAGE_IMAGES = 15;
 const MAX_IMAGE_SIZE_BYTES = 12 * 1024 * 1024;
 const IS_PRODUCTION = process.env.NODE_ENV === "production";
 const PROMPT_VERSION = "2026-04-07.bills.phase-e.v1";
+const OCR_CONCURRENCY_DEFAULT = 1;
+const OCR_CONCURRENCY_MAX = 4;
 
 const RETRYABLE_NETWORK_CODES = new Set([
   "ECONNRESET",
@@ -68,6 +70,16 @@ type TokenUsage = {
 type AtlasVisionResult = {
   content: string;
   usage: TokenUsage;
+};
+
+type PerPageUsageBreakdown = {
+  page_no: number;
+  input_tokens: number;
+  output_tokens: number;
+  total_tokens: number;
+  input_cost_usd: number;
+  output_cost_usd: number;
+  total_cost_usd: number;
 };
 
 type SummaryTotals = {
@@ -842,6 +854,135 @@ function pickPageImages(formData: FormData): {
   return { files: [], warnings };
 }
 
+function resolveOcrConcurrency(): number {
+  const rawValue = Number.parseInt(process.env.BILL_OCR_CONCURRENCY ?? "", 10);
+  if (!Number.isFinite(rawValue) || rawValue < 1) {
+    return OCR_CONCURRENCY_DEFAULT;
+  }
+
+  return Math.min(rawValue, OCR_CONCURRENCY_MAX);
+}
+
+function emptyPageMetadata(): Record<string, string | null> {
+  return {
+    hospital_name: null,
+    report_type: null,
+    patient_name: null,
+    patient_identifier: null,
+    party_name: null,
+    encounter_datetime: null,
+    corporate_no: null,
+    employee_no: null,
+    letter_ref: null,
+  };
+}
+
+function buildFailedPageResult(
+  pageNo: number,
+  type: string,
+  note: string,
+): PageExtractionResult {
+  return {
+    pageNo,
+    metadata: emptyPageMetadata(),
+    summaryTotalsPrinted: emptySummaryTotals(),
+    sections: emptySections(),
+    exceptions: [
+      {
+        type,
+        page_no: pageNo,
+        section: null,
+        note,
+      },
+    ],
+  };
+}
+
+async function processPageImage(
+  file: File,
+  pageNo: number,
+  totalPages: number,
+): Promise<{
+  pageResult: PageExtractionResult;
+  usageBreakdown: PerPageUsageBreakdown | null;
+}> {
+  if (!file.type.startsWith("image/")) {
+    return {
+      pageResult: buildFailedPageResult(
+        pageNo,
+        "UNSUPPORTED_PAGE_MIME",
+        `Page ${pageNo} has unsupported mime type: ${file.type}`,
+      ),
+      usageBreakdown: null,
+    };
+  }
+
+  if (file.size > MAX_IMAGE_SIZE_BYTES) {
+    return {
+      pageResult: buildFailedPageResult(
+        pageNo,
+        "PAGE_TOO_LARGE",
+        `Page ${pageNo} exceeds ${(MAX_IMAGE_SIZE_BYTES / (1024 * 1024)).toFixed(0)}MB limit.`,
+      ),
+      usageBreakdown: null,
+    };
+  }
+
+  try {
+    const buffer = await file.arrayBuffer();
+    const base64 = Buffer.from(buffer).toString("base64");
+    const prompt = buildBillsPrompt(pageNo, totalPages);
+    const atlasResult = await callAtlasVision(base64, file.type, prompt);
+    const extracted = extractJsonObject(atlasResult.content);
+
+    const inputCostUsd = tokenCostUsd(
+      atlasResult.usage.inputTokens,
+      INPUT_USD_PER_1M_TOKENS,
+    );
+    const outputCostUsd = tokenCostUsd(
+      atlasResult.usage.outputTokens,
+      OUTPUT_USD_PER_1M_TOKENS,
+    );
+
+    const usageBreakdown: PerPageUsageBreakdown = {
+      page_no: pageNo,
+      input_tokens: atlasResult.usage.inputTokens,
+      output_tokens: atlasResult.usage.outputTokens,
+      total_tokens: atlasResult.usage.totalTokens,
+      input_cost_usd: inputCostUsd,
+      output_cost_usd: outputCostUsd,
+      total_cost_usd: Number((inputCostUsd + outputCostUsd).toFixed(8)),
+    };
+
+    if (!extracted) {
+      return {
+        pageResult: buildFailedPageResult(
+          pageNo,
+          "PAGE_MODEL_JSON_INVALID",
+          "Model response was not valid JSON for this page.",
+        ),
+        usageBreakdown,
+      };
+    }
+
+    return {
+      pageResult: normalizePageExtraction(extracted, pageNo),
+      usageBreakdown,
+    };
+  } catch (error) {
+    return {
+      pageResult: buildFailedPageResult(
+        pageNo,
+        "PAGE_EXTRACTION_FAILED",
+        error instanceof Error
+          ? error.message
+          : "Unexpected page extraction error.",
+      ),
+      usageBreakdown: null,
+    };
+  }
+}
+
 export async function POST(request: NextRequest) {
   const requestId = crypto.randomUUID();
 
@@ -890,170 +1031,48 @@ export async function POST(request: NextRequest) {
       );
     }
 
-    const pageResults: PageExtractionResult[] = [];
-    const perCallBreakdown: Array<{
-      page_no: number;
-      input_tokens: number;
-      output_tokens: number;
-      total_tokens: number;
-      input_cost_usd: number;
-      output_cost_usd: number;
-      total_cost_usd: number;
-    }> = [];
+    const pageResults = new Array<PageExtractionResult>(files.length);
+    const usageBreakdownByPage = new Map<number, PerPageUsageBreakdown>();
+    const ocrConcurrency = resolveOcrConcurrency();
 
-    let totalInputTokens = 0;
-    let totalOutputTokens = 0;
-    let totalTokens = 0;
+    for (let startIndex = 0; startIndex < files.length; startIndex += ocrConcurrency) {
+      const batchFiles = files.slice(startIndex, startIndex + ocrConcurrency);
 
-    for (let index = 0; index < files.length; index += 1) {
-      const pageNo = index + 1;
-      const file = files[index];
+      const batchResults = await Promise.all(
+        batchFiles.map((file, offset) => {
+          const pageNo = startIndex + offset + 1;
 
-      if (!file.type.startsWith("image/")) {
-        pageResults.push({
-          pageNo,
-          metadata: {
-            hospital_name: null,
-            report_type: null,
-            patient_name: null,
-            patient_identifier: null,
-            party_name: null,
-            encounter_datetime: null,
-            corporate_no: null,
-            employee_no: null,
-            letter_ref: null,
-          },
-          summaryTotalsPrinted: emptySummaryTotals(),
-          sections: emptySections(),
-          exceptions: [
-            {
-              type: "UNSUPPORTED_PAGE_MIME",
-              page_no: pageNo,
-              section: null,
-              note: `Page ${pageNo} has unsupported mime type: ${file.type}`,
-            },
-          ],
-        });
-        continue;
-      }
+          return processPageImage(file, pageNo, files.length);
+        }),
+      );
 
-      if (file.size > MAX_IMAGE_SIZE_BYTES) {
-        pageResults.push({
-          pageNo,
-          metadata: {
-            hospital_name: null,
-            report_type: null,
-            patient_name: null,
-            patient_identifier: null,
-            party_name: null,
-            encounter_datetime: null,
-            corporate_no: null,
-            employee_no: null,
-            letter_ref: null,
-          },
-          summaryTotalsPrinted: emptySummaryTotals(),
-          sections: emptySections(),
-          exceptions: [
-            {
-              type: "PAGE_TOO_LARGE",
-              page_no: pageNo,
-              section: null,
-              note: `Page ${pageNo} exceeds ${(MAX_IMAGE_SIZE_BYTES / (1024 * 1024)).toFixed(0)}MB limit.`,
-            },
-          ],
-        });
-        continue;
-      }
+      for (let offset = 0; offset < batchResults.length; offset += 1) {
+        const pageIndex = startIndex + offset;
+        const pageResult = batchResults[offset];
 
-      try {
-        const buffer = await file.arrayBuffer();
-        const base64 = Buffer.from(buffer).toString("base64");
-        const prompt = buildBillsPrompt(pageNo, files.length);
-        const atlasResult = await callAtlasVision(base64, file.type, prompt);
-        const extracted = extractJsonObject(atlasResult.content);
-
-        totalInputTokens += atlasResult.usage.inputTokens;
-        totalOutputTokens += atlasResult.usage.outputTokens;
-        totalTokens += atlasResult.usage.totalTokens;
-
-        const inputCostUsd = tokenCostUsd(
-          atlasResult.usage.inputTokens,
-          INPUT_USD_PER_1M_TOKENS,
-        );
-        const outputCostUsd = tokenCostUsd(
-          atlasResult.usage.outputTokens,
-          OUTPUT_USD_PER_1M_TOKENS,
-        );
-
-        perCallBreakdown.push({
-          page_no: pageNo,
-          input_tokens: atlasResult.usage.inputTokens,
-          output_tokens: atlasResult.usage.outputTokens,
-          total_tokens: atlasResult.usage.totalTokens,
-          input_cost_usd: inputCostUsd,
-          output_cost_usd: outputCostUsd,
-          total_cost_usd: Number((inputCostUsd + outputCostUsd).toFixed(8)),
-        });
-
-        if (!extracted) {
-          pageResults.push({
-            pageNo,
-            metadata: {
-              hospital_name: null,
-              report_type: null,
-              patient_name: null,
-              patient_identifier: null,
-              party_name: null,
-              encounter_datetime: null,
-              corporate_no: null,
-              employee_no: null,
-              letter_ref: null,
-            },
-            summaryTotalsPrinted: emptySummaryTotals(),
-            sections: emptySections(),
-            exceptions: [
-              {
-                type: "PAGE_MODEL_JSON_INVALID",
-                page_no: pageNo,
-                section: null,
-                note: "Model response was not valid JSON for this page.",
-              },
-            ],
-          });
-          continue;
+        pageResults[pageIndex] = pageResult.pageResult;
+        if (pageResult.usageBreakdown) {
+          usageBreakdownByPage.set(pageResult.usageBreakdown.page_no, pageResult.usageBreakdown);
         }
-
-        pageResults.push(normalizePageExtraction(extracted, pageNo));
-      } catch (error) {
-        pageResults.push({
-          pageNo,
-          metadata: {
-            hospital_name: null,
-            report_type: null,
-            patient_name: null,
-            patient_identifier: null,
-            party_name: null,
-            encounter_datetime: null,
-            corporate_no: null,
-            employee_no: null,
-            letter_ref: null,
-          },
-          summaryTotalsPrinted: emptySummaryTotals(),
-          sections: emptySections(),
-          exceptions: [
-            {
-              type: "PAGE_EXTRACTION_FAILED",
-              page_no: pageNo,
-              section: null,
-              note:
-                error instanceof Error
-                  ? error.message
-                  : "Unexpected page extraction error.",
-            },
-          ],
-        });
       }
     }
+
+    const perCallBreakdown = Array.from(usageBreakdownByPage.values()).sort(
+      (left, right) => left.page_no - right.page_no,
+    );
+
+    const totalInputTokens = perCallBreakdown.reduce(
+      (sum, item) => sum + item.input_tokens,
+      0,
+    );
+    const totalOutputTokens = perCallBreakdown.reduce(
+      (sum, item) => sum + item.output_tokens,
+      0,
+    );
+    const totalTokens = perCallBreakdown.reduce(
+      (sum, item) => sum + item.total_tokens,
+      0,
+    );
 
     const merged = mergePages(pageResults);
     merged.exceptions.unshift(...warnings);
