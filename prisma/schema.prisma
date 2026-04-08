@@ -214,6 +214,11 @@ enum UsageStatus {
   FAILED
 }
 
+enum ExtractionPipeline {
+  CLAIM
+  BILLS
+}
+
 model OcrUsageLog {
   id               String      @id @default(cuid())
   orgId            String
@@ -226,6 +231,7 @@ model OcrUsageLog {
   outputCostUsd    Decimal     @db.Decimal(10, 8)
   totalCostUsd     Decimal     @db.Decimal(10, 8)
   processingTimeMs Int?
+  pipeline         ExtractionPipeline @default(CLAIM)
   status           UsageStatus @default(SUCCESS)
   createdAt        DateTime    @default(now())
 
@@ -234,6 +240,7 @@ model OcrUsageLog {
 
   @@index([orgId])
   @@index([userId])
+  @@index([orgId, pipeline, createdAt])
   @@map("ocr_usage_logs")
 }
 

@@ -18,11 +18,12 @@ interface Analytics {
 export default function AdminAnalyticsPage() {
   const [data, setData] = useState<Analytics | null>(null);
   const [period, setPeriod] = useState("month");
+  const [pipeline, setPipeline] = useState("ALL");
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
     const controller = new AbortController();
-    fetch(`/api/admin/analytics?period=${period}`, {
+    fetch(`/api/admin/analytics?period=${period}&pipeline=${pipeline}`, {
       signal: controller.signal,
     })
       .then((r) => r.json())
@@ -32,7 +33,7 @@ export default function AdminAnalyticsPage() {
       })
       .finally(() => setLoading(false));
     return () => controller.abort();
-  }, [period]);
+  }, [period, pipeline]);
 
   if (loading) {
     return (
@@ -49,15 +50,26 @@ export default function AdminAnalyticsPage() {
             OCR usage and cost breakdown for your organization
           </p>
         </div>
-        <select
-          value={period}
-          onChange={(e) => setPeriod(e.target.value)}
-          className="bg-slate-800 border border-slate-700 text-sm text-white rounded-lg px-3 py-2 focus:border-red-500 focus:outline-none"
-        >
-          <option value="day">Today</option>
-          <option value="week">This Week</option>
-          <option value="month">This Month</option>
-        </select>
+        <div className="flex items-center gap-2">
+          <select
+            value={pipeline}
+            onChange={(e) => setPipeline(e.target.value)}
+            className="bg-slate-800 border border-slate-700 text-sm text-white rounded-lg px-3 py-2 focus:border-red-500 focus:outline-none"
+          >
+            <option value="ALL">All Pipelines</option>
+            <option value="CLAIM">Claims</option>
+            <option value="BILLS">Bills</option>
+          </select>
+          <select
+            value={period}
+            onChange={(e) => setPeriod(e.target.value)}
+            className="bg-slate-800 border border-slate-700 text-sm text-white rounded-lg px-3 py-2 focus:border-red-500 focus:outline-none"
+          >
+            <option value="day">Today</option>
+            <option value="week">This Week</option>
+            <option value="month">This Month</option>
+          </select>
+        </div>
       </div>
 
       {/* Summary */}

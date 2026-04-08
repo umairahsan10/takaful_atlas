@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { auth } from "@/lib/auth";
 import { validateBillAgainstRateList } from "@/lib/bill-validator";
+import { prisma } from "@/lib/db";
 
 const ATLASCLOUD_API_KEY = process.env.ATLASCLOUD_API_KEY;
 const ATLASCLOUD_API_URL = "https://api.atlascloud.ai/v1/chat/completions";
@@ -985,6 +986,36 @@ async function processPageImage(
 
 export async function POST(request: NextRequest) {
   const requestId = crypto.randomUUID();
+  const requestStartedAt = Date.now();
+  let authenticatedUserId: string | null = null;
+  let authenticatedOrgId: string | null = null;
+
+  const recordFailedUsage = async () => {
+    if (!authenticatedUserId || !authenticatedOrgId) {
+      return;
+    }
+
+    try {
+      await prisma.ocrUsageLog.create({
+        data: {
+          orgId: authenticatedOrgId,
+          userId: authenticatedUserId,
+          requestId,
+          inputTokens: 0,
+          outputTokens: 0,
+          totalTokens: 0,
+          inputCostUsd: 0,
+          outputCostUsd: 0,
+          totalCostUsd: 0,
+          processingTimeMs: Date.now() - requestStartedAt,
+          pipeline: "BILLS",
+          status: "FAILED",
+        },
+      });
+    } catch (dbErr) {
+      console.warn(`[extract/bills][${requestId}] Failed to save FAILED OcrUsageLog:`, dbErr);
+    }
+  };
 
   try {
     const session = await auth();
@@ -994,6 +1025,8 @@ export async function POST(request: NextRequest) {
         { status: 401 },
       );
     }
+    authenticatedUserId = session.user.id;
+    authenticatedOrgId = session.user.orgId;
 
     if (!ATLASCLOUD_API_KEY) {
       return NextResponse.json(
@@ -1112,6 +1145,28 @@ export async function POST(request: NextRequest) {
 
     const totalInputCostUsd = tokenCostUsd(totalInputTokens, INPUT_USD_PER_1M_TOKENS);
     const totalOutputCostUsd = tokenCostUsd(totalOutputTokens, OUTPUT_USD_PER_1M_TOKENS);
+    const totalCostUsd = Number((totalInputCostUsd + totalOutputCostUsd).toFixed(8));
+
+    try {
+      await prisma.ocrUsageLog.create({
+        data: {
+          orgId: session.user.orgId,
+          userId: session.user.id,
+          requestId,
+          inputTokens: totalInputTokens,
+          outputTokens: totalOutputTokens,
+          totalTokens,
+          inputCostUsd: totalInputCostUsd,
+          outputCostUsd: totalOutputCostUsd,
+          totalCostUsd,
+          processingTimeMs: Date.now() - requestStartedAt,
+          pipeline: "BILLS",
+          status: "SUCCESS",
+        },
+      });
+    } catch (dbErr) {
+      console.warn(`[extract/bills][${requestId}] Failed to save OcrUsageLog:`, dbErr);
+    }
 
     return NextResponse.json({
       request_id: requestId,
@@ -1158,7 +1213,7 @@ export async function POST(request: NextRequest) {
         amount_usd: {
           input: totalInputCostUsd,
           output: totalOutputCostUsd,
-          total: Number((totalInputCostUsd + totalOutputCostUsd).toFixed(8)),
+          total: totalCostUsd,
         },
         per_page_breakdown: perCallBreakdown,
       },
@@ -1169,6 +1224,7 @@ export async function POST(request: NextRequest) {
     });
   } catch (error) {
     console.error(`[extract/bills][${requestId}] error`, error);
+    await recordFailedUsage();
 
     const networkError = isRetryableNetworkError(error);
     const responseBody: {

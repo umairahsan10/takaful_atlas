@@ -504,6 +504,36 @@ async function callAtlasVision(
 
 export async function POST(request: NextRequest) {
   const requestId = crypto.randomUUID();
+  const requestStartedAt = Date.now();
+  let authenticatedUserId: string | null = null;
+  let authenticatedOrgId: string | null = null;
+
+  const recordFailedUsage = async () => {
+    if (!authenticatedUserId || !authenticatedOrgId) {
+      return;
+    }
+
+    try {
+      await prisma.ocrUsageLog.create({
+        data: {
+          orgId: authenticatedOrgId,
+          userId: authenticatedUserId,
+          requestId,
+          inputTokens: 0,
+          outputTokens: 0,
+          totalTokens: 0,
+          inputCostUsd: 0,
+          outputCostUsd: 0,
+          totalCostUsd: 0,
+          processingTimeMs: Date.now() - requestStartedAt,
+          pipeline: "CLAIM",
+          status: "FAILED",
+        },
+      });
+    } catch (dbErr) {
+      console.warn(`[extract][${requestId}] Failed to save FAILED OcrUsageLog:`, dbErr);
+    }
+  };
 
   try {
     // ── Auth check ──────────────────────────────────────────────
@@ -516,6 +546,8 @@ export async function POST(request: NextRequest) {
     }
     const userId = session.user.id;
     const orgId = session.user.orgId;
+    authenticatedUserId = userId;
+    authenticatedOrgId = orgId;
 
     // ── Quota check ─────────────────────────────────────────────
     const quota = await checkExtractionQuota(orgId);
@@ -612,6 +644,7 @@ Return JSON with these snake_case keys (include only fields that are visible/cle
     const mainJson = extractJsonObject(mainResult.content);
 
     if (!mainJson) {
+      await recordFailedUsage();
       return NextResponse.json(
         { error: "Model response was not valid JSON", request_id: requestId },
         { status: 500 },
@@ -761,7 +794,8 @@ Return JSON with these snake_case keys (include only fields that are visible/cle
           inputCostUsd: inputAmountUsd,
           outputCostUsd: outputAmountUsd,
           totalCostUsd: totalAmountUsd,
-          processingTimeMs: Date.now() - new Date(timestamp).getTime(),
+          processingTimeMs: Date.now() - requestStartedAt,
+          pipeline: "CLAIM",
           status: "SUCCESS",
         },
       });
@@ -847,6 +881,7 @@ Return JSON with these snake_case keys (include only fields that are visible/cle
     });
   } catch (error) {
     console.error(`[extract][${requestId}] Extract API error:`, error);
+    await recordFailedUsage();
     const networkError = isRetryableNetworkError(error);
     const responseBody: {
       error: string;

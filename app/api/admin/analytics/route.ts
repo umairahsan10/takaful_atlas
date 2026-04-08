@@ -18,6 +18,11 @@ export async function GET(req: Request) {
 
   const { searchParams } = new URL(req.url);
   const period = searchParams.get("period") || "month";
+  const requestedPipeline = (searchParams.get("pipeline") || "ALL").toUpperCase();
+  const pipeline =
+    requestedPipeline === "CLAIM" || requestedPipeline === "BILLS"
+      ? requestedPipeline
+      : "ALL";
 
   const now = new Date();
   let startDate: Date;
@@ -49,6 +54,7 @@ export async function GET(req: Request) {
           orgId,
           userId: user.id,
           createdAt: { gte: startDate },
+          ...(pipeline === "ALL" ? {} : { pipeline }),
         },
         _sum: { totalCostUsd: true, totalTokens: true },
         _count: true,
@@ -68,7 +74,11 @@ export async function GET(req: Request) {
   // Org totals
   const [orgUsage, claimStats, claimsToday, quota] = await Promise.all([
     prisma.ocrUsageLog.aggregate({
-      where: { orgId, createdAt: { gte: startDate } },
+      where: {
+        orgId,
+        createdAt: { gte: startDate },
+        ...(pipeline === "ALL" ? {} : { pipeline }),
+      },
       _sum: { totalCostUsd: true, totalTokens: true },
       _count: true,
       _avg: { processingTimeMs: true },
@@ -86,6 +96,7 @@ export async function GET(req: Request) {
 
   return NextResponse.json({
     period,
+    pipeline,
     userCount: users.length,
     totalCost: orgUsage._sum.totalCostUsd?.toNumber() ?? 0,
     totalTokens: orgUsage._sum.totalTokens ?? 0,

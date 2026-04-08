@@ -25,15 +25,16 @@ type GlobalAnalytics = {
 export default function SuperAdminDashboard() {
   const [data, setData] = useState<GlobalAnalytics | null>(null);
   const [period, setPeriod] = useState("month");
+  const [pipeline, setPipeline] = useState("ALL");
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
     setLoading(true);
-    fetch(`/api/super-admin/analytics?period=${period}`)
+    fetch(`/api/super-admin/analytics?period=${period}&pipeline=${pipeline}`)
       .then((r) => r.json())
       .then(setData)
       .finally(() => setLoading(false));
-  }, [period]);
+  }, [period, pipeline]);
 
   if (loading) {
     return (
@@ -59,15 +60,26 @@ export default function SuperAdminDashboard() {
     <div>
       <div className="flex items-center justify-between mb-8">
         <h1 className="text-2xl font-bold text-white">Dashboard</h1>
-        <select
-          value={period}
-          onChange={(e) => setPeriod(e.target.value)}
-          className="bg-slate-800 border border-slate-700 rounded-lg px-3 py-2 text-sm text-white"
-        >
-          <option value="day">Today</option>
-          <option value="week">This Week</option>
-          <option value="month">This Month</option>
-        </select>
+        <div className="flex items-center gap-2">
+          <select
+            value={pipeline}
+            onChange={(e) => setPipeline(e.target.value)}
+            className="bg-slate-800 border border-slate-700 rounded-lg px-3 py-2 text-sm text-white"
+          >
+            <option value="ALL">All Pipelines</option>
+            <option value="CLAIM">Claims</option>
+            <option value="BILLS">Bills</option>
+          </select>
+          <select
+            value={period}
+            onChange={(e) => setPeriod(e.target.value)}
+            className="bg-slate-800 border border-slate-700 rounded-lg px-3 py-2 text-sm text-white"
+          >
+            <option value="day">Today</option>
+            <option value="week">This Week</option>
+            <option value="month">This Month</option>
+          </select>
+        </div>
       </div>
 
       {/* Summary Cards */}
