@@ -2,6 +2,8 @@ import { NextRequest, NextResponse } from "next/server";
 import { auth } from "@/lib/auth";
 import { validateBillAgainstRateList } from "@/lib/bill-validator";
 import { prisma } from "@/lib/db";
+import { writeAuditLog } from "@/lib/audit";
+import { checkExtractionQuota, incrementExtractionCountBy } from "@/lib/quota";
 
 const ATLASCLOUD_API_KEY = process.env.ATLASCLOUD_API_KEY;
 const ATLASCLOUD_API_URL = "https://api.atlascloud.ai/v1/chat/completions";
@@ -906,6 +908,7 @@ async function processPageImage(
 ): Promise<{
   pageResult: PageExtractionResult;
   usageBreakdown: PerPageUsageBreakdown | null;
+  atlasAttempted: boolean;
 }> {
   if (!file.type.startsWith("image/")) {
     return {
@@ -915,6 +918,7 @@ async function processPageImage(
         `Page ${pageNo} has unsupported mime type: ${file.type}`,
       ),
       usageBreakdown: null,
+      atlasAttempted: false,
     };
   }
 
@@ -926,13 +930,17 @@ async function processPageImage(
         `Page ${pageNo} exceeds ${(MAX_IMAGE_SIZE_BYTES / (1024 * 1024)).toFixed(0)}MB limit.`,
       ),
       usageBreakdown: null,
+      atlasAttempted: false,
     };
   }
+
+  let atlasAttempted = false;
 
   try {
     const buffer = await file.arrayBuffer();
     const base64 = Buffer.from(buffer).toString("base64");
     const prompt = buildBillsPrompt(pageNo, totalPages);
+    atlasAttempted = true;
     const atlasResult = await callAtlasVision(base64, file.type, prompt);
     const extracted = extractJsonObject(atlasResult.content);
 
@@ -963,12 +971,14 @@ async function processPageImage(
           "Model response was not valid JSON for this page.",
         ),
         usageBreakdown,
+        atlasAttempted,
       };
     }
 
     return {
       pageResult: normalizePageExtraction(extracted, pageNo),
       usageBreakdown,
+      atlasAttempted,
     };
   } catch (error) {
     return {
@@ -980,6 +990,7 @@ async function processPageImage(
           : "Unexpected page extraction error.",
       ),
       usageBreakdown: null,
+      atlasAttempted,
     };
   }
 }
@@ -989,6 +1000,7 @@ export async function POST(request: NextRequest) {
   const requestStartedAt = Date.now();
   let authenticatedUserId: string | null = null;
   let authenticatedOrgId: string | null = null;
+  let atlasPagesAttempted = 0;
 
   const recordFailedUsage = async () => {
     if (!authenticatedUserId || !authenticatedOrgId) {
@@ -1064,6 +1076,40 @@ export async function POST(request: NextRequest) {
       );
     }
 
+    // Bills pipeline uses strict hard-blocking against shared org quota.
+    const quota = await checkExtractionQuota(session.user.orgId);
+    const requestedUnits = files.length;
+    if (quota.remaining < requestedUnits) {
+      await writeAuditLog({
+        orgId: session.user.orgId,
+        actorUserId: session.user.id,
+        actionType: "QUOTA_EXCEEDED",
+        targetEntity: requestId,
+        metadata: {
+          pipeline: "BILLS",
+          used: quota.used,
+          limit: quota.limit,
+          remaining: quota.remaining,
+          requestedUnits,
+        },
+      });
+
+      return NextResponse.json(
+        {
+          error: "Extraction quota exceeded",
+          message: `Bills upload requires ${requestedUnits} quota unit(s), but only ${quota.remaining} remaining.`,
+          quota: {
+            used: quota.used,
+            limit: quota.limit,
+            remaining: quota.remaining,
+            required: requestedUnits,
+          },
+          request_id: requestId,
+        },
+        { status: 429 },
+      );
+    }
+
     const pageResults = new Array<PageExtractionResult>(files.length);
     const usageBreakdownByPage = new Map<number, PerPageUsageBreakdown>();
     const ocrConcurrency = resolveOcrConcurrency();
@@ -1084,6 +1130,9 @@ export async function POST(request: NextRequest) {
         const pageResult = batchResults[offset];
 
         pageResults[pageIndex] = pageResult.pageResult;
+        if (pageResult.atlasAttempted) {
+          atlasPagesAttempted += 1;
+        }
         if (pageResult.usageBreakdown) {
           usageBreakdownByPage.set(pageResult.usageBreakdown.page_no, pageResult.usageBreakdown);
         }
@@ -1168,6 +1217,12 @@ export async function POST(request: NextRequest) {
       console.warn(`[extract/bills][${requestId}] Failed to save OcrUsageLog:`, dbErr);
     }
 
+    try {
+      await incrementExtractionCountBy(session.user.orgId, atlasPagesAttempted);
+    } catch (qErr) {
+      console.warn(`[extract/bills][${requestId}] Failed to increment quota by pages attempted:`, qErr);
+    }
+
     return NextResponse.json({
       request_id: requestId,
       metadata: {
@@ -1216,6 +1271,10 @@ export async function POST(request: NextRequest) {
           total: totalCostUsd,
         },
         per_page_breakdown: perCallBreakdown,
+      },
+      quota_usage: {
+        units_charged: atlasPagesAttempted,
+        unit_rule: "1 unit per page sent to Atlas",
       },
       persistence: {
         enabled: false,

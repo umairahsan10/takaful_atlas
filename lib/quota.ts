@@ -77,9 +77,24 @@ export async function checkExtractionQuota(
  * Increment the org's monthly extraction counter by 1.
  */
 export async function incrementExtractionCount(orgId: string): Promise<void> {
+  await incrementExtractionCountBy(orgId, 1);
+}
+
+/**
+ * Increment the org's monthly extraction counter by a variable amount.
+ */
+export async function incrementExtractionCountBy(
+  orgId: string,
+  amount: number,
+): Promise<void> {
+  const units = Number.isFinite(amount) ? Math.floor(amount) : 0;
+  if (units <= 0) {
+    return;
+  }
+
   await prisma.orgQuota.update({
     where: { orgId },
-    data: { currentMonthExtractions: { increment: 1 } },
+    data: { currentMonthExtractions: { increment: units } },
   });
 }
 
