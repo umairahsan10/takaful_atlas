@@ -80,7 +80,7 @@ export default function OrgDetailPage() {
   };
 
   if (loading) {
-    return <div className="text-slate-400 text-center py-12">Loading...</div>;
+    return <div className="text-gray-600 text-center py-12">Loading...</div>;
   }
 
   return (
@@ -88,36 +88,36 @@ export default function OrgDetailPage() {
       <div className="flex items-center gap-3 mb-8">
         <Link
           href="/super-admin/orgs"
-          className="text-slate-400 hover:text-white transition-colors"
+          className="text-gray-600 hover:text-gray-900 transition-colors"
         >
           ← Back
         </Link>
-        <h1 className="text-2xl font-bold text-white">Organization Detail</h1>
+        <h1 className="text-2xl font-bold text-gray-900">Organization Detail</h1>
       </div>
 
       {/* Quota Management */}
-      <div className="bg-slate-900 border border-slate-800 rounded-xl p-6 mb-8">
-        <h2 className="text-lg font-semibold text-white mb-4">
+      <div className="bg-white border border-gray-200 rounded-xl p-6 mb-8">
+        <h2 className="text-lg font-semibold text-gray-900 mb-4">
           Quota Settings
         </h2>
-        <div className="mb-4 p-3 bg-slate-800 rounded-lg">
-          <span className="text-sm text-slate-400">Current usage: </span>
-          <span className="text-white font-medium">
+        <div className="mb-4 p-3 bg-gray-100 rounded-lg">
+          <span className="text-sm text-gray-600">Current usage: </span>
+          <span className="text-gray-900 font-medium">
             {quota?.currentMonthExtractions ?? 0}
           </span>
-          <span className="text-slate-400"> / </span>
-          <span className="text-white font-medium">
+          <span className="text-gray-600"> / </span>
+          <span className="text-gray-900 font-medium">
             {(quota?.maxExtractionsPerMonth ?? 0) +
               (quota?.bonusExtractions ?? 0)}
           </span>
-          <span className="text-sm text-slate-400">
+          <span className="text-sm text-gray-600">
             {" "}
             extractions this month
           </span>
         </div>
         <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
           <div>
-            <label className="block text-sm text-slate-400 mb-1">
+            <label className="block text-sm text-gray-600 mb-1">
               Max Users
             </label>
             <input
@@ -130,11 +130,11 @@ export default function OrgDetailPage() {
                   maxUsers: parseInt(e.target.value) || 1,
                 })
               }
-              className="w-full px-3 py-2 bg-slate-800 border border-slate-700 rounded-lg text-white text-sm"
+              className="w-full px-3 py-2 bg-gray-100 border border-gray-300 rounded-lg text-gray-900 text-sm"
             />
           </div>
           <div>
-            <label className="block text-sm text-slate-400 mb-1">
+            <label className="block text-sm text-gray-600 mb-1">
               Max Extractions/Month
             </label>
             <input
@@ -149,11 +149,11 @@ export default function OrgDetailPage() {
                       : Math.max(1, parseInt(e.target.value, 10) || 1),
                 })
               }
-              className="w-full px-3 py-2 bg-slate-800 border border-slate-700 rounded-lg text-white text-sm"
+              className="w-full px-3 py-2 bg-gray-100 border border-gray-300 rounded-lg text-gray-900 text-sm"
             />
           </div>
           <div>
-            <label className="block text-sm text-slate-400 mb-1">
+            <label className="block text-sm text-gray-600 mb-1">
               Bonus Extractions
             </label>
             <input
@@ -166,11 +166,11 @@ export default function OrgDetailPage() {
                   bonusExtractions: parseInt(e.target.value) || 0,
                 })
               }
-              className="w-full px-3 py-2 bg-slate-800 border border-slate-700 rounded-lg text-white text-sm"
+              className="w-full px-3 py-2 bg-gray-100 border border-gray-300 rounded-lg text-gray-900 text-sm"
             />
           </div>
           <div>
-            <label className="block text-sm text-slate-400 mb-1">
+            <label className="block text-sm text-gray-600 mb-1">
               Enforcement
             </label>
             <select
@@ -178,14 +178,14 @@ export default function OrgDetailPage() {
               onChange={(e) =>
                 setEditQuota({ ...editQuota, enforcementMode: e.target.value })
               }
-              className="w-full px-3 py-2 bg-slate-800 border border-slate-700 rounded-lg text-white text-sm"
+              className="w-full px-3 py-2 bg-gray-100 border border-gray-300 rounded-lg text-gray-900 text-sm"
             >
               <option value="HARD_BLOCK">Hard Block</option>
               <option value="SOFT_WARN">Soft Warn</option>
             </select>
           </div>
           <div>
-            <label className="block text-sm text-slate-400 mb-1">
+            <label className="block text-sm text-gray-600 mb-1">
               Reset Day of Month
             </label>
             <input
@@ -199,7 +199,7 @@ export default function OrgDetailPage() {
                   quotaResetDay: parseInt(e.target.value) || 1,
                 })
               }
-              className="w-full px-3 py-2 bg-slate-800 border border-slate-700 rounded-lg text-white text-sm"
+              className="w-full px-3 py-2 bg-gray-100 border border-gray-300 rounded-lg text-gray-900 text-sm"
             />
           </div>
           <div className="flex items-end">
@@ -215,14 +215,14 @@ export default function OrgDetailPage() {
       </div>
 
       {/* Users */}
-      <div className="bg-slate-900 border border-slate-800 rounded-xl overflow-hidden">
-        <div className="p-5 border-b border-slate-800">
-          <h2 className="text-lg font-semibold text-white">Users</h2>
+      <div className="bg-white border border-gray-200 rounded-xl overflow-hidden">
+        <div className="p-5 border-b border-gray-200">
+          <h2 className="text-lg font-semibold text-gray-900">Users</h2>
         </div>
         <div className="overflow-x-auto">
           <table className="w-full text-sm">
             <thead>
-              <tr className="border-b border-slate-800 text-slate-400">
+              <tr className="border-b border-gray-200 text-gray-600">
                 <th className="text-left p-4">Name</th>
                 <th className="text-left p-4">Email</th>
                 <th className="text-center p-4">Role</th>
@@ -235,7 +235,7 @@ export default function OrgDetailPage() {
               {users.map((user) => (
                 <tr
                   key={user.id}
-                  className="border-b border-slate-800/50 text-slate-300 hover:bg-slate-800/30"
+                  className="border-b border-gray-200 text-gray-700 hover:bg-gray-50"
                 >
                   <td className="p-4 font-medium">{user.name}</td>
                   <td className="p-4">{user.email}</td>
@@ -243,8 +243,8 @@ export default function OrgDetailPage() {
                     <span
                       className={`text-xs px-2 py-1 rounded ${
                         user.role === "ADMIN"
-                          ? "bg-blue-500/10 text-blue-400"
-                          : "bg-slate-500/10 text-slate-400"
+                          ? "bg-blue-50 text-blue-700"
+                          : "bg-gray-100 text-gray-600"
                       }`}
                     >
                       {user.role}
@@ -254,14 +254,14 @@ export default function OrgDetailPage() {
                     <span
                       className={`text-xs px-2 py-1 rounded ${
                         user.isActive
-                          ? "bg-green-500/10 text-green-400"
-                          : "bg-red-500/10 text-red-400"
+                          ? "bg-green-50 text-green-700"
+                          : "bg-red-50 text-red-700"
                       }`}
                     >
                       {user.isActive ? "Active" : "Inactive"}
                     </span>
                   </td>
-                  <td className="p-4 text-slate-400">
+                  <td className="p-4 text-gray-600">
                     {user.lastLogin
                       ? new Date(user.lastLogin).toLocaleString()
                       : "Never"}
@@ -269,7 +269,7 @@ export default function OrgDetailPage() {
                   <td className="p-4 text-right">
                     <button
                       onClick={() => handleForceLogout(user.id)}
-                      className="text-red-400 hover:text-red-300 text-sm"
+                      className="text-red-600 hover:text-red-700 text-sm"
                     >
                       Force Logout
                     </button>
@@ -278,7 +278,7 @@ export default function OrgDetailPage() {
               ))}
               {users.length === 0 && (
                 <tr>
-                  <td colSpan={6} className="p-8 text-center text-slate-500">
+                  <td colSpan={6} className="p-8 text-center text-gray-500">
                     No users in this organization
                   </td>
                 </tr>

@@ -90,15 +90,15 @@ export default function AdminUsersPage() {
   const atLimit = quota && quota.currentUserCount >= quota.maxUsers;
 
   if (loading) {
-    return <div className="text-slate-400 animate-pulse">Loading users...</div>;
+    return <div className="text-gray-600 animate-pulse">Loading users...</div>;
   }
 
   return (
     <div>
       <div className="flex items-center justify-between mb-8">
         <div>
-          <h1 className="text-2xl font-bold text-white">User Management</h1>
-          <p className="text-slate-500 text-sm mt-1">
+          <h1 className="text-2xl font-bold text-gray-900">User Management</h1>
+          <p className="text-gray-500 text-sm mt-1">
             {quota?.currentUserCount || 0} / {quota?.maxUsers || 0} staff users
           </p>
         </div>
@@ -107,7 +107,7 @@ export default function AdminUsersPage() {
           disabled={!!atLimit}
           className={`px-4 py-2 rounded-lg text-sm font-medium transition-colors ${
             atLimit
-              ? "bg-slate-700 text-slate-500 cursor-not-allowed"
+              ? "bg-gray-200 text-gray-500 cursor-not-allowed"
               : "bg-red-600 text-white hover:bg-red-700"
           }`}
         >
@@ -117,12 +117,12 @@ export default function AdminUsersPage() {
 
       {/* Create Form */}
       {showCreate && (
-        <div className="bg-slate-900 border border-slate-800 rounded-xl p-6 mb-8">
-          <h2 className="text-sm font-semibold text-slate-300 mb-4">
+        <div className="bg-white border border-gray-200 rounded-xl p-6 mb-8">
+          <h2 className="text-sm font-semibold text-gray-700 mb-4">
             New Staff User
           </h2>
           {error && (
-            <div className="bg-red-500/10 border border-red-500/30 text-red-400 text-sm rounded-lg px-4 py-2 mb-4">
+            <div className="bg-red-50 border border-red-200 text-red-700 text-sm rounded-lg px-4 py-2 mb-4">
               {error}
             </div>
           )}
@@ -132,7 +132,7 @@ export default function AdminUsersPage() {
               placeholder="Full Name"
               value={form.name}
               onChange={(e) => setForm({ ...form, name: e.target.value })}
-              className="bg-slate-800 border border-slate-700 rounded-lg px-3 py-2 text-sm text-white focus:border-red-500 focus:outline-none"
+              className="bg-gray-100 border border-gray-300 rounded-lg px-3 py-2 text-sm text-gray-900 focus:border-red-500 focus:outline-none"
             />
             <input
               required
@@ -140,7 +140,7 @@ export default function AdminUsersPage() {
               placeholder="Email"
               value={form.email}
               onChange={(e) => setForm({ ...form, email: e.target.value })}
-              className="bg-slate-800 border border-slate-700 rounded-lg px-3 py-2 text-sm text-white focus:border-red-500 focus:outline-none"
+              className="bg-gray-100 border border-gray-300 rounded-lg px-3 py-2 text-sm text-gray-900 focus:border-red-500 focus:outline-none"
             />
             <input
               required
@@ -148,7 +148,7 @@ export default function AdminUsersPage() {
               placeholder="Password"
               value={form.password}
               onChange={(e) => setForm({ ...form, password: e.target.value })}
-              className="bg-slate-800 border border-slate-700 rounded-lg px-3 py-2 text-sm text-white focus:border-red-500 focus:outline-none"
+              className="bg-gray-100 border border-gray-300 rounded-lg px-3 py-2 text-sm text-gray-900 focus:border-red-500 focus:outline-none"
             />
             <div className="col-span-3 flex gap-2">
               <button
@@ -164,7 +164,7 @@ export default function AdminUsersPage() {
                   setShowCreate(false);
                   setError("");
                 }}
-                className="text-slate-400 px-4 py-2 rounded-lg text-sm hover:text-white"
+                className="text-gray-600 px-4 py-2 rounded-lg text-sm hover:text-gray-900"
               >
                 Cancel
               </button>
@@ -174,9 +174,9 @@ export default function AdminUsersPage() {
       )}
 
       {/* Users Table */}
-      <div className="bg-slate-900 border border-slate-800 rounded-xl overflow-hidden">
+      <div className="bg-white border border-gray-200 rounded-xl overflow-hidden">
         <table className="w-full text-sm">
-          <thead className="text-xs text-slate-500 border-b border-slate-800">
+          <thead className="text-xs text-gray-500 border-b border-gray-200">
             <tr>
               <th className="text-left px-5 py-3">User</th>
               <th className="text-left px-5 py-3">Status</th>
@@ -190,18 +190,18 @@ export default function AdminUsersPage() {
               users.map((u) => (
                 <tr
                   key={u.id}
-                  className="border-b border-slate-800/50 hover:bg-slate-800/30"
+                  className="border-b border-gray-200 hover:bg-gray-50"
                 >
                   <td className="px-5 py-3">
-                    <div className="text-white">{u.name}</div>
-                    <div className="text-xs text-slate-500">{u.email}</div>
+                    <div className="text-gray-900">{u.name}</div>
+                    <div className="text-xs text-gray-500">{u.email}</div>
                   </td>
                   <td className="px-5 py-3">
                     <span
                       className={`text-xs px-2 py-0.5 rounded ${
                         u.isActive
-                          ? "bg-green-500/20 text-green-400"
-                          : "bg-slate-700 text-slate-500"
+                          ? "bg-green-50 text-green-700"
+                          : "bg-gray-200 text-gray-500"
                       }`}
                     >
                       {u.isActive ? "Active" : "Inactive"}
@@ -210,14 +210,14 @@ export default function AdminUsersPage() {
                   <td className="px-5 py-3">
                     <span
                       className={`w-2 h-2 rounded-full inline-block mr-2 ${
-                        u.currentSessionToken ? "bg-green-500" : "bg-slate-600"
+                        u.currentSessionToken ? "bg-green-500" : "bg-gray-400"
                       }`}
                     />
-                    <span className="text-xs text-slate-400">
+                    <span className="text-xs text-gray-600">
                       {u.currentSessionToken ? "Online" : "Offline"}
                     </span>
                   </td>
-                  <td className="px-5 py-3 text-xs text-slate-400">
+                  <td className="px-5 py-3 text-xs text-gray-600">
                     {u.lastLogin
                       ? new Date(u.lastLogin).toLocaleString()
                       : "Never"}
@@ -226,7 +226,7 @@ export default function AdminUsersPage() {
                     {u.currentSessionToken && u.id !== currentUserId && (
                       <button
                         onClick={() => setForceLogoutTarget(u)}
-                        className="text-xs text-red-400 hover:text-red-300 transition-colors"
+                        className="text-xs text-red-600 hover:text-red-700 transition-colors"
                       >
                         Force Logout
                       </button>
@@ -238,7 +238,7 @@ export default function AdminUsersPage() {
               <tr>
                 <td
                   colSpan={5}
-                  className="px-5 py-8 text-center text-slate-600"
+                  className="px-5 py-8 text-center text-gray-500"
                 >
                   No staff users yet
                 </td>
@@ -257,7 +257,7 @@ export default function AdminUsersPage() {
             onClick={() => !forceLoggingOut && setForceLogoutTarget(null)}
           />
           {/* Dialog */}
-          <div className="relative bg-slate-900 border border-slate-700 rounded-2xl shadow-2xl p-6 w-full max-w-md mx-4">
+          <div className="relative bg-white border border-gray-300 rounded-2xl shadow-2xl p-6 w-full max-w-md mx-4">
             {/* Icon */}
             <div className="flex items-center justify-center w-12 h-12 rounded-full bg-red-500/10 border border-red-500/30 mx-auto mb-4">
               <svg
@@ -274,19 +274,19 @@ export default function AdminUsersPage() {
                 />
               </svg>
             </div>
-            <h2 className="text-lg font-bold text-white text-center mb-1">
+            <h2 className="text-lg font-bold text-gray-900 text-center mb-1">
               Force Logout
             </h2>
-            <p className="text-slate-400 text-sm text-center mb-1">
+            <p className="text-gray-600 text-sm text-center mb-1">
               You are about to end the active session for
             </p>
-            <p className="text-white font-semibold text-center mb-1">
+            <p className="text-gray-900 font-semibold text-center mb-1">
               {forceLogoutTarget.name}
             </p>
-            <p className="text-slate-500 text-xs text-center mb-6">
+            <p className="text-gray-500 text-xs text-center mb-6">
               {forceLogoutTarget.email}
             </p>
-            <p className="text-slate-400 text-xs text-center mb-6 bg-slate-800 rounded-lg px-4 py-3">
+            <p className="text-gray-600 text-xs text-center mb-6 bg-gray-100 rounded-lg px-4 py-3">
               Their session will be invalidated. They will be redirected to the
               login page the next time they reload or navigate.
             </p>
@@ -294,7 +294,7 @@ export default function AdminUsersPage() {
               <button
                 onClick={() => setForceLogoutTarget(null)}
                 disabled={forceLoggingOut}
-                className="flex-1 px-4 py-2.5 rounded-lg text-sm font-medium text-slate-300 bg-slate-800 hover:bg-slate-700 transition-colors disabled:opacity-50"
+                className="flex-1 px-4 py-2.5 rounded-lg text-sm font-medium text-gray-700 bg-gray-100 hover:bg-gray-200 transition-colors disabled:opacity-50"
               >
                 Cancel
               </button>

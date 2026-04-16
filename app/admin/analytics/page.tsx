@@ -38,7 +38,7 @@ export default function AdminAnalyticsPage() {
 
   if (loading) {
     return (
-      <div className="text-slate-400 animate-pulse">Loading analytics...</div>
+      <div className="text-gray-600 animate-pulse">Loading analytics...</div>
     );
   }
 
@@ -46,8 +46,8 @@ export default function AdminAnalyticsPage() {
     <div>
       <div className="flex items-center justify-between mb-8">
         <div>
-          <h1 className="text-2xl font-bold text-white">Analytics</h1>
-          <p className="text-slate-500 text-sm mt-1">
+          <h1 className="text-2xl font-bold text-gray-900">Analytics</h1>
+          <p className="text-gray-500 text-sm mt-1">
             OCR usage and cost breakdown for your organization
           </p>
         </div>
@@ -55,7 +55,7 @@ export default function AdminAnalyticsPage() {
           <select
             value={pipeline}
             onChange={(e) => setPipeline(e.target.value)}
-            className="bg-slate-800 border border-slate-700 text-sm text-white rounded-lg px-3 py-2 focus:border-red-500 focus:outline-none"
+            className="bg-gray-100 border border-gray-300 text-sm text-gray-900 rounded-lg px-3 py-2 focus:border-red-500 focus:outline-none"
           >
             <option value="ALL">All Pipelines</option>
             <option value="CLAIM">Claims</option>
@@ -64,7 +64,7 @@ export default function AdminAnalyticsPage() {
           <select
             value={period}
             onChange={(e) => setPeriod(e.target.value)}
-            className="bg-slate-800 border border-slate-700 text-sm text-white rounded-lg px-3 py-2 focus:border-red-500 focus:outline-none"
+            className="bg-gray-100 border border-gray-300 text-sm text-gray-900 rounded-lg px-3 py-2 focus:border-red-500 focus:outline-none"
           >
             <option value="day">Today</option>
             <option value="week">This Week</option>
@@ -75,35 +75,35 @@ export default function AdminAnalyticsPage() {
 
       {/* Summary */}
       <div className="grid grid-cols-1 md:grid-cols-3 gap-4 mb-8">
-        <div className="bg-slate-900 border border-slate-800 rounded-xl p-5">
-          <p className="text-xs text-slate-500 mb-1">Total Extractions</p>
-          <p className="text-2xl font-bold text-white">
+        <div className="bg-white border border-gray-200 rounded-xl p-5">
+          <p className="text-xs text-gray-500 mb-1">Total Extractions</p>
+          <p className="text-2xl font-bold text-gray-900">
             {data?.totalExtractions || 0}
           </p>
         </div>
-        <div className="bg-slate-900 border border-slate-800 rounded-xl p-5">
-          <p className="text-xs text-slate-500 mb-1">Total Cost</p>
-          <p className="text-2xl font-bold text-white">
+        <div className="bg-white border border-gray-200 rounded-xl p-5">
+          <p className="text-xs text-gray-500 mb-1">Total Cost</p>
+          <p className="text-2xl font-bold text-gray-900">
             ${(data?.totalCost || 0).toFixed(8)}
           </p>
         </div>
-        <div className="bg-slate-900 border border-slate-800 rounded-xl p-5">
-          <p className="text-xs text-slate-500 mb-1">Active Staff</p>
-          <p className="text-2xl font-bold text-white">
+        <div className="bg-white border border-gray-200 rounded-xl p-5">
+          <p className="text-xs text-gray-500 mb-1">Active Staff</p>
+          <p className="text-2xl font-bold text-gray-900">
             {data?.perUserStats?.length || 0}
           </p>
         </div>
       </div>
 
       {/* Per-User Breakdown */}
-      <div className="bg-slate-900 border border-slate-800 rounded-xl overflow-hidden mb-8">
-        <div className="p-5 border-b border-slate-800">
-          <h2 className="text-sm font-semibold text-slate-300">
+      <div className="bg-white border border-gray-200 rounded-xl overflow-hidden mb-8">
+        <div className="p-5 border-b border-gray-200">
+          <h2 className="text-sm font-semibold text-gray-700">
             Usage by Staff Member
           </h2>
         </div>
         <table className="w-full text-sm">
-          <thead className="text-xs text-slate-500 border-b border-slate-800">
+          <thead className="text-xs text-gray-500 border-b border-gray-200">
             <tr>
               <th className="text-left px-5 py-3">User</th>
               <th className="text-left px-5 py-3">Extractions</th>
@@ -116,17 +116,17 @@ export default function AdminAnalyticsPage() {
               data.perUserStats.map((u) => (
                 <tr
                   key={u.userId}
-                  className="border-b border-slate-800/50 hover:bg-slate-800/30"
+                  className="border-b border-gray-200 hover:bg-gray-50"
                 >
                   <td className="px-5 py-3">
-                    <div className="text-white">{u.name}</div>
-                    <div className="text-xs text-slate-500">{u.email}</div>
+                    <div className="text-gray-900">{u.name}</div>
+                    <div className="text-xs text-gray-500">{u.email}</div>
                   </td>
-                  <td className="px-5 py-3 text-slate-300">{u.extractions}</td>
-                  <td className="px-5 py-3 text-slate-300">
+                  <td className="px-5 py-3 text-gray-700">{u.extractions}</td>
+                  <td className="px-5 py-3 text-gray-700">
                     ${u.cost.toFixed(8)}
                   </td>
-                  <td className="px-5 py-3 text-slate-300">
+                  <td className="px-5 py-3 text-gray-700">
                     ${u.extractions ? (u.cost / u.extractions).toFixed(8) : "0"}
                   </td>
                 </tr>
@@ -135,7 +135,7 @@ export default function AdminAnalyticsPage() {
               <tr>
                 <td
                   colSpan={4}
-                  className="px-5 py-6 text-center text-slate-600"
+                  className="px-5 py-6 text-center text-gray-500"
                 >
                   No data for this period
                 </td>
@@ -146,24 +146,24 @@ export default function AdminAnalyticsPage() {
       </div>
 
       {/* Claims By Status */}
-      <div className="bg-slate-900 border border-slate-800 rounded-xl p-5">
-        <h2 className="text-sm font-semibold text-slate-300 mb-4">
+      <div className="bg-white border border-gray-200 rounded-xl p-5">
+        <h2 className="text-sm font-semibold text-gray-700 mb-4">
           Claims by Status
         </h2>
         <div className="flex gap-4 flex-wrap">
           {data?.claimsByStatus?.length ? (
             data.claimsByStatus.map((s) => {
               const statusColor: Record<string, string> = {
-                PENDING_REVIEW: "bg-yellow-500/20 text-yellow-400",
-                APPROVED: "bg-green-500/20 text-green-400",
-                FLAGGED: "bg-red-500/20 text-red-400",
-                EXPORTED: "bg-blue-500/20 text-blue-400",
+                PENDING_REVIEW: "bg-yellow-50 text-yellow-700",
+                APPROVED: "bg-green-50 text-green-700",
+                FLAGGED: "bg-red-50 text-red-700",
+                EXPORTED: "bg-blue-50 text-blue-700",
               };
               return (
                 <div
                   key={s.status}
                   className={`rounded-lg px-4 py-3 min-w-30 ${
-                    statusColor[s.status] || "bg-slate-800 text-slate-400"
+                    statusColor[s.status] || "bg-gray-100 text-gray-600"
                   }`}
                 >
                   <p className="text-xs opacity-80">{s.status}</p>
@@ -172,7 +172,7 @@ export default function AdminAnalyticsPage() {
               );
             })
           ) : (
-            <p className="text-slate-600 text-sm">No claims data</p>
+            <p className="text-gray-500 text-sm">No claims data</p>
           )}
         </div>
       </div>

@@ -31,42 +31,42 @@ export default function AdminLayout({
   }, [status, router]);
 
   return (
-    <div className="min-h-screen bg-slate-950 flex overflow-x-hidden">
+    <div className="min-h-screen bg-gray-50 flex overflow-x-hidden">
       <button
         onClick={() => setSidebarOpen(true)}
         aria-label="Open sidebar"
-        className={`fixed top-4 left-4 z-50 p-2 rounded-lg bg-slate-900 border border-slate-700 shadow-sm hover:bg-slate-800 transition-all duration-300 ease-out ${
+        className={`fixed top-4 left-4 z-50 p-2 rounded-lg bg-white border border-gray-300 shadow-sm hover:bg-gray-100 transition-all duration-300 ease-out ${
           sidebarOpen
             ? "opacity-0 -translate-x-2 pointer-events-none"
             : "opacity-100 translate-x-0"
         }`}
       >
-        <span className="block w-5 h-0.5 bg-slate-200 mb-1" />
-        <span className="block w-5 h-0.5 bg-slate-200 mb-1" />
-        <span className="block w-5 h-0.5 bg-slate-200" />
+        <span className="block w-5 h-0.5 bg-gray-700 mb-1" />
+        <span className="block w-5 h-0.5 bg-gray-700 mb-1" />
+        <span className="block w-5 h-0.5 bg-gray-700" />
       </button>
 
       <aside
-        className={`fixed top-0 left-0 h-full w-64 z-40 bg-slate-900 border-r border-slate-800 shadow-sm flex flex-col transition-transform duration-500 ease-[cubic-bezier(0.22,1,0.36,1)] will-change-transform ${
+        className={`fixed top-0 left-0 h-full w-64 z-40 bg-white border-r border-gray-200 shadow-sm flex flex-col transition-transform duration-500 ease-[cubic-bezier(0.22,1,0.36,1)] will-change-transform ${
           sidebarOpen ? "translate-x-0" : "-translate-x-full"
         }`}
       >
-        <div className="p-6 border-b border-slate-800 shrink-0">
+        <div className="p-6 border-b border-gray-200 shrink-0">
           <div className="flex items-start justify-between gap-4">
             <div>
-              <h1 className="text-xl font-bold text-white">
+              <h1 className="text-xl font-bold text-gray-900">
                 Takaful <span className="text-red-500">Atlas</span>
               </h1>
-              <p className="text-xs text-slate-500 mt-1">Admin Panel</p>
+              <p className="text-xs text-gray-500 mt-1">Admin Panel</p>
             </div>
             <button
               onClick={() => setSidebarOpen(false)}
               aria-label="Collapse sidebar"
-              className="shrink-0 p-2 rounded-lg bg-slate-900 border border-slate-700 shadow-sm hover:bg-slate-800 transition-colors"
+              className="shrink-0 p-2 rounded-lg bg-white border border-gray-300 shadow-sm hover:bg-gray-100 transition-colors"
             >
-              <span className="block w-5 h-0.5 bg-slate-200 mb-1" />
-              <span className="block w-5 h-0.5 bg-slate-200 mb-1" />
-              <span className="block w-5 h-0.5 bg-slate-200" />
+              <span className="block w-5 h-0.5 bg-gray-700 mb-1" />
+              <span className="block w-5 h-0.5 bg-gray-700 mb-1" />
+              <span className="block w-5 h-0.5 bg-gray-700" />
             </button>
           </div>
         </div>
@@ -82,8 +82,8 @@ export default function AdminLayout({
                 href={item.href}
                 className={`flex items-center gap-3 px-3 py-2.5 rounded-lg text-sm transition-colors ${
                   isActive
-                    ? "bg-red-500/10 text-red-400"
-                    : "text-slate-400 hover:text-white hover:bg-slate-800"
+                    ? "bg-red-50 text-red-600 font-medium"
+                    : "text-gray-600 hover:text-gray-900 hover:bg-gray-100"
                 }`}
               >
                 <span>{item.icon}</span>
@@ -93,8 +93,8 @@ export default function AdminLayout({
           })}
         </nav>
 
-        <div className="p-4 border-t border-slate-800">
-          <div className="text-sm text-slate-400 mb-3 truncate">
+        <div className="p-4 border-t border-gray-200">
+          <div className="text-sm text-gray-600 mb-3 truncate">
             {session?.user?.email}
           </div>
           <button
@@ -102,7 +102,7 @@ export default function AdminLayout({
               await fetch("/api/auth/logout", { method: "POST" });
               signOut({ redirectTo: "/login" });
             }}
-            className="w-full flex items-center justify-between rounded-lg border border-red-500/30 bg-red-500/10 px-3 py-2.5 text-sm font-semibold text-red-300 hover:bg-red-500/20 transition-colors"
+            className="w-full flex items-center justify-between rounded-lg border border-red-200 bg-red-50 px-3 py-2.5 text-sm font-semibold text-red-600 hover:bg-red-100 transition-colors"
           >
             <span>Sign Out</span>
             <span aria-hidden="true">→</span>

@@ -83,7 +83,7 @@ export default function OrgsPage() {
   return (
     <div>
       <div className="flex items-center justify-between mb-8">
-        <h1 className="text-2xl font-bold text-white">Organizations</h1>
+        <h1 className="text-2xl font-bold text-gray-900">Organizations</h1>
         <button
           onClick={() => setShowCreate(!showCreate)}
           className="px-4 py-2 bg-red-600 hover:bg-red-700 text-white text-sm font-medium rounded-lg transition-colors"
@@ -94,12 +94,12 @@ export default function OrgsPage() {
 
       {/* Create Form */}
       {showCreate && (
-        <div className="bg-slate-900 border border-slate-800 rounded-xl p-6 mb-8">
-          <h2 className="text-lg font-semibold text-white mb-4">
+        <div className="bg-white border border-gray-200 rounded-xl p-6 mb-8">
+          <h2 className="text-lg font-semibold text-gray-900 mb-4">
             Create Organization + Admin
           </h2>
           {error && (
-            <div className="mb-4 p-3 bg-red-500/10 border border-red-500/20 rounded-lg text-red-400 text-sm">
+            <div className="mb-4 p-3 bg-red-50 border border-red-200 rounded-lg text-red-700 text-sm">
               {error}
             </div>
           )}
@@ -108,19 +108,19 @@ export default function OrgsPage() {
             className="grid grid-cols-1 md:grid-cols-2 gap-4"
           >
             <div>
-              <label className="block text-sm text-slate-400 mb-1">
+              <label className="block text-sm text-gray-600 mb-1">
                 Org Name
               </label>
               <input
                 required
                 value={form.orgName}
                 onChange={(e) => setForm({ ...form, orgName: e.target.value })}
-                className="w-full px-3 py-2 bg-slate-800 border border-slate-700 rounded-lg text-white text-sm"
+                className="w-full px-3 py-2 bg-gray-100 border border-gray-300 rounded-lg text-gray-900 text-sm"
                 placeholder="Pak Qatar Family Takaful"
               />
             </div>
             <div>
-              <label className="block text-sm text-slate-400 mb-1">
+              <label className="block text-sm text-gray-600 mb-1">
                 Slug (unique)
               </label>
               <input
@@ -134,12 +134,12 @@ export default function OrgsPage() {
                       .replace(/[^a-z0-9-]/g, ""),
                   })
                 }
-                className="w-full px-3 py-2 bg-slate-800 border border-slate-700 rounded-lg text-white text-sm"
+                className="w-full px-3 py-2 bg-gray-100 border border-gray-300 rounded-lg text-gray-900 text-sm"
                 placeholder="pak-qatar"
               />
             </div>
             <div>
-              <label className="block text-sm text-slate-400 mb-1">
+              <label className="block text-sm text-gray-600 mb-1">
                 Admin Name
               </label>
               <input
@@ -148,12 +148,12 @@ export default function OrgsPage() {
                 onChange={(e) =>
                   setForm({ ...form, adminName: e.target.value })
                 }
-                className="w-full px-3 py-2 bg-slate-800 border border-slate-700 rounded-lg text-white text-sm"
+                className="w-full px-3 py-2 bg-gray-100 border border-gray-300 rounded-lg text-gray-900 text-sm"
                 placeholder="John Doe"
               />
             </div>
             <div>
-              <label className="block text-sm text-slate-400 mb-1">
+              <label className="block text-sm text-gray-600 mb-1">
                 Admin Email
               </label>
               <input
@@ -163,12 +163,12 @@ export default function OrgsPage() {
                 onChange={(e) =>
                   setForm({ ...form, adminEmail: e.target.value })
                 }
-                className="w-full px-3 py-2 bg-slate-800 border border-slate-700 rounded-lg text-white text-sm"
+                className="w-full px-3 py-2 bg-gray-100 border border-gray-300 rounded-lg text-gray-900 text-sm"
                 placeholder="admin@company.com"
               />
             </div>
             <div>
-              <label className="block text-sm text-slate-400 mb-1">
+              <label className="block text-sm text-gray-600 mb-1">
                 Admin Password
               </label>
               <input
@@ -178,12 +178,12 @@ export default function OrgsPage() {
                 onChange={(e) =>
                   setForm({ ...form, adminPassword: e.target.value })
                 }
-                className="w-full px-3 py-2 bg-slate-800 border border-slate-700 rounded-lg text-white text-sm"
+                className="w-full px-3 py-2 bg-gray-100 border border-gray-300 rounded-lg text-gray-900 text-sm"
                 placeholder="••••••••"
               />
             </div>
             <div>
-              <label className="block text-sm text-slate-400 mb-1">
+              <label className="block text-sm text-gray-600 mb-1">
                 Enforcement
               </label>
               <select
@@ -191,14 +191,14 @@ export default function OrgsPage() {
                 onChange={(e) =>
                   setForm({ ...form, enforcementMode: e.target.value })
                 }
-                className="w-full px-3 py-2 bg-slate-800 border border-slate-700 rounded-lg text-white text-sm"
+                className="w-full px-3 py-2 bg-gray-100 border border-gray-300 rounded-lg text-gray-900 text-sm"
               >
                 <option value="HARD_BLOCK">Hard Block</option>
                 <option value="SOFT_WARN">Soft Warn</option>
               </select>
             </div>
             <div>
-              <label className="block text-sm text-slate-400 mb-1">
+              <label className="block text-sm text-gray-600 mb-1">
                 Max Users
               </label>
               <input
@@ -208,11 +208,11 @@ export default function OrgsPage() {
                 onChange={(e) =>
                   setForm({ ...form, maxUsers: parseInt(e.target.value) || 5 })
                 }
-                className="w-full px-3 py-2 bg-slate-800 border border-slate-700 rounded-lg text-white text-sm"
+                className="w-full px-3 py-2 bg-gray-100 border border-gray-300 rounded-lg text-gray-900 text-sm"
               />
             </div>
             <div>
-              <label className="block text-sm text-slate-400 mb-1">
+              <label className="block text-sm text-gray-600 mb-1">
                 Max Extractions/Month
               </label>
               <input
@@ -225,7 +225,7 @@ export default function OrgsPage() {
                     maxExtractionsPerMonth: parseInt(e.target.value) || 100,
                   })
                 }
-                className="w-full px-3 py-2 bg-slate-800 border border-slate-700 rounded-lg text-white text-sm"
+                className="w-full px-3 py-2 bg-gray-100 border border-gray-300 rounded-lg text-gray-900 text-sm"
               />
             </div>
             <div className="md:col-span-2">
@@ -242,14 +242,14 @@ export default function OrgsPage() {
       )}
 
       {/* Orgs Table */}
-      <div className="bg-slate-900 border border-slate-800 rounded-xl overflow-hidden">
+      <div className="bg-white border border-gray-200 rounded-xl overflow-hidden">
         {loading ? (
-          <div className="p-8 text-center text-slate-500">Loading...</div>
+          <div className="p-8 text-center text-gray-500">Loading...</div>
         ) : (
           <div className="overflow-x-auto">
             <table className="w-full text-sm">
               <thead>
-                <tr className="border-b border-slate-800 text-slate-400">
+                <tr className="border-b border-gray-200 text-gray-600">
                   <th className="text-left p-4">Organization</th>
                   <th className="text-left p-4">Admin</th>
                   <th className="text-right p-4">Users</th>
@@ -263,15 +263,15 @@ export default function OrgsPage() {
                 {orgs.map((org) => (
                   <tr
                     key={org.id}
-                    className="border-b border-slate-800/50 text-slate-300 hover:bg-slate-800/30"
+                    className="border-b border-gray-200 text-gray-700 hover:bg-gray-50"
                   >
                     <td className="p-4">
                       <div className="font-medium">{org.name}</div>
-                      <div className="text-xs text-slate-500">{org.slug}</div>
+                      <div className="text-xs text-gray-500">{org.slug}</div>
                     </td>
                     <td className="p-4">
                       <div>{org.adminName ?? "—"}</div>
-                      <div className="text-xs text-slate-500">
+                      <div className="text-xs text-gray-500">
                         {org.adminEmail ?? "—"}
                       </div>
                     </td>
@@ -284,7 +284,7 @@ export default function OrgsPage() {
                           org.quota &&
                           org.quota.currentMonthExtractions >=
                             org.quota.maxExtractionsPerMonth
-                            ? "text-red-400"
+                            ? "text-red-600"
                             : ""
                         }
                       >
@@ -299,8 +299,8 @@ export default function OrgsPage() {
                       <span
                         className={`text-xs px-2 py-1 rounded ${
                           org.quota?.enforcementMode === "HARD_BLOCK"
-                            ? "bg-red-500/10 text-red-400"
-                            : "bg-yellow-500/10 text-yellow-400"
+                            ? "bg-red-50 text-red-700"
+                            : "bg-yellow-50 text-yellow-700"
                         }`}
                       >
                         {org.quota?.enforcementMode ?? "—"}
@@ -310,8 +310,8 @@ export default function OrgsPage() {
                       <span
                         className={`text-xs px-2 py-1 rounded ${
                           org.isActive
-                            ? "bg-green-500/10 text-green-400"
-                            : "bg-slate-500/10 text-slate-400"
+                            ? "bg-green-50 text-green-700"
+                            : "bg-gray-100 text-gray-600"
                         }`}
                       >
                         {org.isActive ? "Active" : "Inactive"}
@@ -320,7 +320,7 @@ export default function OrgsPage() {
                     <td className="p-4 text-right">
                       <Link
                         href={`/super-admin/orgs/${org.id}`}
-                        className="text-red-400 hover:text-red-300 text-sm"
+                        className="text-red-600 hover:text-red-700 text-sm"
                       >
                         Manage
                       </Link>
@@ -329,7 +329,7 @@ export default function OrgsPage() {
                 ))}
                 {orgs.length === 0 && (
                   <tr>
-                    <td colSpan={7} className="p-8 text-center text-slate-500">
+                    <td colSpan={7} className="p-8 text-center text-gray-500">
                       No organizations yet. Create one above.
                     </td>
                   </tr>

@@ -37,11 +37,11 @@ export default function AdminQuotaPage() {
   }, []);
 
   if (loading) {
-    return <div className="text-slate-400 animate-pulse">Loading quota...</div>;
+    return <div className="text-gray-600 animate-pulse">Loading quota...</div>;
   }
 
   if (!quota) {
-    return <div className="text-red-400">Failed to load quota</div>;
+    return <div className="text-red-700">Failed to load quota</div>;
   }
 
   const totalLimit =
@@ -71,30 +71,30 @@ export default function AdminQuotaPage() {
 
   return (
     <div>
-      <h1 className="text-2xl font-bold text-white mb-1">Quota Overview</h1>
-      <p className="text-slate-500 text-sm mb-8">
+      <h1 className="text-2xl font-bold text-gray-900 mb-1">Quota Overview</h1>
+      <p className="text-gray-500 text-sm mb-8">
         Read-only view of your organization&apos;s quota limits and current
         usage. Contact Super Admin to request changes.
       </p>
 
       <div className="grid grid-cols-1 md:grid-cols-2 gap-6 mb-8">
         {/* Extraction Quota */}
-        <div className="bg-slate-900 border border-slate-800 rounded-xl p-6">
+        <div className="bg-white border border-gray-200 rounded-xl p-6">
           <div className="flex items-center justify-between mb-4">
-            <h2 className="text-sm font-semibold text-slate-300">
+            <h2 className="text-sm font-semibold text-gray-700">
               Extraction Quota
             </h2>
             <span
               className={`text-xs px-2 py-0.5 rounded ${
                 quota.enforcementMode === "HARD_BLOCK"
-                  ? "bg-red-500/20 text-red-400"
-                  : "bg-yellow-500/20 text-yellow-400"
+                  ? "bg-red-50 text-red-700"
+                  : "bg-yellow-50 text-yellow-700"
               }`}
             >
               {quota.enforcementMode}
             </span>
           </div>
-          <div className="w-full bg-slate-800 rounded-full h-4 mb-3">
+          <div className="w-full bg-gray-100 rounded-full h-4 mb-3">
             <div
               className={`${barColor(usagePercent)} h-4 rounded-full transition-all`}
               style={{ width: `${usagePercent}%` }}
@@ -102,24 +102,24 @@ export default function AdminQuotaPage() {
           </div>
           <div className="grid grid-cols-2 gap-4 text-sm">
             <div>
-              <p className="text-slate-500 text-xs">Used</p>
-              <p className="text-white font-semibold">
+              <p className="text-gray-500 text-xs">Used</p>
+              <p className="text-gray-900 font-semibold">
                 {quota.currentMonthExtractions}
               </p>
             </div>
             <div>
-              <p className="text-slate-500 text-xs">Remaining</p>
-              <p className="text-white font-semibold">{remaining}</p>
+              <p className="text-gray-500 text-xs">Remaining</p>
+              <p className="text-gray-900 font-semibold">{remaining}</p>
             </div>
             <div>
-              <p className="text-slate-500 text-xs">Monthly Limit</p>
-              <p className="text-white font-semibold">
+              <p className="text-gray-500 text-xs">Monthly Limit</p>
+              <p className="text-gray-900 font-semibold">
                 {quota.maxExtractionsPerMonth}
               </p>
             </div>
             <div>
-              <p className="text-slate-500 text-xs">Bonus</p>
-              <p className="text-white font-semibold">
+              <p className="text-gray-500 text-xs">Bonus</p>
+              <p className="text-gray-900 font-semibold">
                 {quota.bonusExtractions}
               </p>
             </div>
@@ -127,11 +127,11 @@ export default function AdminQuotaPage() {
         </div>
 
         {/* User Quota */}
-        <div className="bg-slate-900 border border-slate-800 rounded-xl p-6">
-          <h2 className="text-sm font-semibold text-slate-300 mb-4">
+        <div className="bg-white border border-gray-200 rounded-xl p-6">
+          <h2 className="text-sm font-semibold text-gray-700 mb-4">
             User Quota
           </h2>
-          <div className="w-full bg-slate-800 rounded-full h-4 mb-3">
+          <div className="w-full bg-gray-100 rounded-full h-4 mb-3">
             <div
               className={`${barColor(userUsagePercent)} h-4 rounded-full transition-all`}
               style={{ width: `${userUsagePercent}%` }}
@@ -139,16 +139,16 @@ export default function AdminQuotaPage() {
           </div>
           <div className="grid grid-cols-2 gap-4 text-sm">
             <div>
-              <p className="text-slate-500 text-xs">Staff Users</p>
-              <p className="text-white font-semibold">
+              <p className="text-gray-500 text-xs">Staff Users</p>
+              <p className="text-gray-900 font-semibold">
                 {quota.currentUserCount} / {quota.maxUsers}
               </p>
             </div>
             <div>
-              <p className="text-slate-500 text-xs">Reset Day</p>
-              <p className="text-white font-semibold">
+              <p className="text-gray-500 text-xs">Reset Day</p>
+              <p className="text-gray-900 font-semibold">
                 {quota.quotaResetDay}{" "}
-                <span className="text-xs text-slate-500">of each month</span>
+                <span className="text-xs text-gray-500">of each month</span>
               </p>
             </div>
           </div>
@@ -156,8 +156,8 @@ export default function AdminQuotaPage() {
       </div>
 
       {/* Details */}
-      <div className="bg-slate-900 border border-slate-800 rounded-xl p-6">
-        <h2 className="text-sm font-semibold text-slate-300 mb-4">
+      <div className="bg-white border border-gray-200 rounded-xl p-6">
+        <h2 className="text-sm font-semibold text-gray-700 mb-4">
           Quota Details
         </h2>
         <dl className="grid grid-cols-2 md:grid-cols-4 gap-4 text-sm">
@@ -176,8 +176,8 @@ export default function AdminQuotaPage() {
             },
           ].map((item) => (
             <div key={item.label}>
-              <dt className="text-slate-500 text-xs">{item.label}</dt>
-              <dd className="text-white font-semibold mt-0.5">{item.value}</dd>
+              <dt className="text-gray-500 text-xs">{item.label}</dt>
+              <dd className="text-gray-900 font-semibold mt-0.5">{item.value}</dd>
             </div>
           ))}
         </dl>

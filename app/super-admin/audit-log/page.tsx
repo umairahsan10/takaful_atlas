@@ -47,10 +47,10 @@ export default function SuperAdminAuditLogPage() {
   return (
     <div>
       <div className="flex items-center justify-between mb-5">
-        <h1 className="text-2xl font-bold text-white">Global Audit Log</h1>
+        <h1 className="text-2xl font-bold text-gray-900">Global Audit Log</h1>
       </div>
 
-      <div className="bg-slate-900 border border-slate-800 rounded-xl p-4 mb-6">
+      <div className="bg-white border border-gray-200 rounded-xl p-4 mb-6">
         <div className="grid grid-cols-1 md:grid-cols-5 gap-3">
           <input
             value={searchQuery}
@@ -59,7 +59,7 @@ export default function SuperAdminAuditLogPage() {
               setSearchQuery(e.target.value);
             }}
             placeholder="Search actor, email, org, action, target..."
-            className="md:col-span-2 bg-slate-800 border border-slate-700 rounded-lg px-3 py-2 text-sm text-white placeholder:text-slate-500 focus:border-red-500 focus:outline-none"
+            className="md:col-span-2 bg-gray-100 border border-gray-300 rounded-lg px-3 py-2 text-sm text-gray-900 placeholder:text-gray-500 focus:border-red-500 focus:outline-none"
           />
 
           <select
@@ -68,7 +68,7 @@ export default function SuperAdminAuditLogPage() {
               setLoading(true);
               setOrgFilter(e.target.value);
             }}
-            className="bg-slate-800 border border-slate-700 rounded-lg px-3 py-2 text-sm text-white"
+            className="bg-gray-100 border border-gray-300 rounded-lg px-3 py-2 text-sm text-gray-900"
           >
             <option value="">All Organizations</option>
             {orgs.map((org) => (
@@ -84,7 +84,7 @@ export default function SuperAdminAuditLogPage() {
               setLoading(true);
               setActionFilter(e.target.value);
             }}
-            className="bg-slate-800 border border-slate-700 rounded-lg px-3 py-2 text-sm text-white"
+            className="bg-gray-100 border border-gray-300 rounded-lg px-3 py-2 text-sm text-gray-900"
           >
             <option value="">All Actions</option>
             {actions.map((action) => (
@@ -104,7 +104,7 @@ export default function SuperAdminAuditLogPage() {
               setFromDate("");
               setToDate("");
             }}
-            className="bg-slate-800 border border-slate-700 rounded-lg px-3 py-2 text-sm text-slate-300 hover:text-white hover:bg-slate-700 transition-colors"
+            className="bg-gray-100 border border-gray-300 rounded-lg px-3 py-2 text-sm text-gray-700 hover:text-gray-900 hover:bg-gray-200 transition-colors"
           >
             Clear Filters
           </button>
@@ -118,7 +118,7 @@ export default function SuperAdminAuditLogPage() {
               setLoading(true);
               setFromDate(e.target.value);
             }}
-            className="bg-slate-800 border border-slate-700 rounded-lg px-3 py-2 text-sm text-white"
+            className="bg-gray-100 border border-gray-300 rounded-lg px-3 py-2 text-sm text-gray-900"
           />
           <input
             type="date"
@@ -127,23 +127,23 @@ export default function SuperAdminAuditLogPage() {
               setLoading(true);
               setToDate(e.target.value);
             }}
-            className="bg-slate-800 border border-slate-700 rounded-lg px-3 py-2 text-sm text-white"
+            className="bg-gray-100 border border-gray-300 rounded-lg px-3 py-2 text-sm text-gray-900"
           />
         </div>
       </div>
 
       <div className="mb-3">
-        <p className="text-xs text-slate-500">Showing {logs.length} log entries</p>
+        <p className="text-xs text-gray-500">Showing {logs.length} log entries</p>
       </div>
 
-      <div className="bg-slate-900 border border-slate-800 rounded-xl overflow-hidden">
+      <div className="bg-white border border-gray-200 rounded-xl overflow-hidden">
         {loading ? (
-          <div className="p-8 text-center text-slate-500">Loading...</div>
+          <div className="p-8 text-center text-gray-500">Loading...</div>
         ) : (
           <div className="overflow-x-auto">
             <table className="w-full text-sm">
               <thead>
-                <tr className="border-b border-slate-800 text-slate-400">
+                <tr className="border-b border-gray-200 text-gray-600">
                   <th className="text-left p-4">Time</th>
                   <th className="text-left p-4">Actor</th>
                   <th className="text-left p-4">Org</th>
@@ -155,31 +155,31 @@ export default function SuperAdminAuditLogPage() {
                 {logs.map((log) => (
                   <tr
                     key={log.id}
-                    className="border-b border-slate-800/50 text-slate-300 hover:bg-slate-800/30"
+                    className="border-b border-gray-200 text-gray-700 hover:bg-gray-50"
                   >
-                    <td className="p-4 text-slate-400 whitespace-nowrap">
+                    <td className="p-4 text-gray-600 whitespace-nowrap">
                       {new Date(log.createdAt).toLocaleString()}
                     </td>
                     <td className="p-4">
                       <div>{log.actor.name}</div>
-                      <div className="text-xs text-slate-500">
+                      <div className="text-xs text-gray-500">
                         {log.actor.email}
                       </div>
                     </td>
                     <td className="p-4">{log.org?.name ?? "—"}</td>
                     <td className="p-4 text-center">
-                      <span className="text-xs px-2 py-1 rounded bg-slate-800 text-slate-300">
+                      <span className="text-xs px-2 py-1 rounded bg-gray-100 text-gray-700">
                         {log.actionType}
                       </span>
                     </td>
-                    <td className="p-4 text-slate-400 text-xs font-mono truncate max-w-[200px]">
+                    <td className="p-4 text-gray-600 text-xs font-mono truncate max-w-[200px]">
                       {log.targetEntity ?? "—"}
                     </td>
                   </tr>
                 ))}
                 {logs.length === 0 && (
                   <tr>
-                    <td colSpan={5} className="p-8 text-center text-slate-500">
+                    <td colSpan={5} className="p-8 text-center text-gray-500">
                       No audit logs found
                     </td>
                   </tr>
