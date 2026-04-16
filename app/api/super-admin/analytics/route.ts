@@ -48,20 +48,15 @@ export async function GET(req: Request) {
   const orgStats = await Promise.all(
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
     orgs.map(async (org: any) => {
-      const [usageAgg, claimCount] = await Promise.all([
-        prisma.ocrUsageLog.aggregate({
-          where: {
-            orgId: org.id,
-            createdAt: { gte: startDate },
-            ...(pipeline === "ALL" ? {} : { pipeline }),
-          },
-          _sum: { totalCostUsd: true, totalTokens: true },
-          _count: true,
-        }),
-        prisma.claimExtraction.count({
-          where: { orgId: org.id, createdAt: { gte: startDate } },
-        }),
-      ]);
+      const usageAgg = await prisma.ocrUsageLog.aggregate({
+        where: {
+          orgId: org.id,
+          createdAt: { gte: startDate },
+          ...(pipeline === "ALL" ? {} : { pipeline }),
+        },
+        _sum: { totalCostUsd: true, totalTokens: true },
+        _count: true,
+      });
 
       return {
         orgId: org.id,
@@ -69,10 +64,8 @@ export async function GET(req: Request) {
         totalCost: usageAgg._sum.totalCostUsd?.toNumber() ?? 0,
         totalTokens: usageAgg._sum.totalTokens ?? 0,
         extractionCount: usageAgg._count,
-        claimCount,
-        // monthlyQuotaUsed always reflects the quota counter (current month, all pipelines)
-        // so it stays consistent with how quota limits are enforced
-        monthlyQuotaUsed: org.quota?.currentMonthExtractions ?? 0,
+        // Keep quota used aligned with extraction counts for selected period/pipeline.
+        quotaUsed: usageAgg._count,
         quotaLimit: org.quota
           ? org.quota.maxExtractionsPerMonth + org.quota.bonusExtractions
           : 0,

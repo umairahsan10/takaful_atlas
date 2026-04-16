@@ -17,7 +17,7 @@ type GlobalAnalytics = {
     totalTokens: number;
     extractionCount: number;
     quotaLimit: number;
-    monthlyQuotaUsed: number;
+    quotaUsed: number;
   }[];
 };
 
@@ -101,7 +101,7 @@ export default function SuperAdminDashboard() {
           </h2>
           <p className="text-xs text-slate-500 mt-1">
             Extractions = OCR requests for the selected period &amp; pipeline.
-            Monthly Quota = total units used this month against assigned limit.
+            Quota Used = filtered extraction count against the monthly quota limit.
           </p>
         </div>
         <div className="overflow-x-auto">
@@ -110,7 +110,7 @@ export default function SuperAdminDashboard() {
               <tr className="border-b border-slate-800 text-slate-400">
                 <th className="text-left p-4">Organization</th>
                 <th className="text-right p-4">Extractions</th>
-                <th className="text-right p-4">Monthly Quota</th>
+                <th className="text-right p-4">Quota Used</th>
                 <th className="text-right p-4">Cost (USD)</th>
                 <th className="text-right p-4">Tokens</th>
               </tr>
@@ -126,12 +126,12 @@ export default function SuperAdminDashboard() {
                   <td className="p-4 text-right">
                     <span
                       className={
-                        org.monthlyQuotaUsed >= org.quotaLimit
+                        org.quotaUsed >= org.quotaLimit
                           ? "text-red-400"
                           : "text-green-400"
                       }
                     >
-                      {org.monthlyQuotaUsed} / {org.quotaLimit}
+                      {org.quotaUsed} / {org.quotaLimit}
                     </span>
                   </td>
                   <td className="p-4 text-right">

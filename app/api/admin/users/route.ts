@@ -44,6 +44,7 @@ export async function GET() {
   return NextResponse.json({
     users,
     quota: quotaInfo,
+    currentUserId: session.user.id,
   });
 }
 

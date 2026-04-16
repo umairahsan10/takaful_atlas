@@ -17,38 +17,123 @@ type AuditEntry = {
 
 export default function SuperAdminAuditLogPage() {
   const [logs, setLogs] = useState<AuditEntry[]>([]);
+  const [actions, setActions] = useState<string[]>([]);
+  const [orgs, setOrgs] = useState<Array<{ id: string; name: string }>>([]);
   const [loading, setLoading] = useState(true);
+  const [searchQuery, setSearchQuery] = useState("");
   const [actionFilter, setActionFilter] = useState("");
+  const [orgFilter, setOrgFilter] = useState("");
+  const [fromDate, setFromDate] = useState("");
+  const [toDate, setToDate] = useState("");
 
   useEffect(() => {
     const params = new URLSearchParams();
+    if (searchQuery.trim()) params.set("q", searchQuery.trim());
     if (actionFilter) params.set("action", actionFilter);
+    if (orgFilter) params.set("orgId", orgFilter);
+    if (fromDate) params.set("from", fromDate);
+    if (toDate) params.set("to", toDate);
 
     fetch(`/api/super-admin/audit-log?${params}`)
       .then((r) => r.json())
-      .then(setLogs)
+      .then((payload) => {
+        setLogs(payload.logs || []);
+        setActions(payload.filters?.actions || []);
+        setOrgs(payload.filters?.orgs || []);
+      })
       .finally(() => setLoading(false));
-  }, [actionFilter]);
+  }, [searchQuery, actionFilter, orgFilter, fromDate, toDate]);
 
   return (
     <div>
-      <div className="flex items-center justify-between mb-8">
+      <div className="flex items-center justify-between mb-5">
         <h1 className="text-2xl font-bold text-white">Global Audit Log</h1>
-        <select
-          value={actionFilter}
-          onChange={(e) => setActionFilter(e.target.value)}
-          className="bg-slate-800 border border-slate-700 rounded-lg px-3 py-2 text-sm text-white"
-        >
-          <option value="">All Actions</option>
-          <option value="LOGIN">Login</option>
-          <option value="LOGOUT">Logout</option>
-          <option value="FORCE_LOGOUT">Force Logout</option>
-          <option value="CREATE_ORG">Create Org</option>
-          <option value="CREATE_USER">Create User</option>
-          <option value="SET_QUOTA">Set Quota</option>
-          <option value="UPLOAD_CLAIM">Upload Claim</option>
-          <option value="QUOTA_EXCEEDED">Quota Exceeded</option>
-        </select>
+      </div>
+
+      <div className="bg-slate-900 border border-slate-800 rounded-xl p-4 mb-6">
+        <div className="grid grid-cols-1 md:grid-cols-5 gap-3">
+          <input
+            value={searchQuery}
+            onChange={(e) => {
+              setLoading(true);
+              setSearchQuery(e.target.value);
+            }}
+            placeholder="Search actor, email, org, action, target..."
+            className="md:col-span-2 bg-slate-800 border border-slate-700 rounded-lg px-3 py-2 text-sm text-white placeholder:text-slate-500 focus:border-red-500 focus:outline-none"
+          />
+
+          <select
+            value={orgFilter}
+            onChange={(e) => {
+              setLoading(true);
+              setOrgFilter(e.target.value);
+            }}
+            className="bg-slate-800 border border-slate-700 rounded-lg px-3 py-2 text-sm text-white"
+          >
+            <option value="">All Organizations</option>
+            {orgs.map((org) => (
+              <option key={org.id} value={org.id}>
+                {org.name}
+              </option>
+            ))}
+          </select>
+
+          <select
+            value={actionFilter}
+            onChange={(e) => {
+              setLoading(true);
+              setActionFilter(e.target.value);
+            }}
+            className="bg-slate-800 border border-slate-700 rounded-lg px-3 py-2 text-sm text-white"
+          >
+            <option value="">All Actions</option>
+            {actions.map((action) => (
+              <option key={action} value={action}>
+                {action}
+              </option>
+            ))}
+          </select>
+
+          <button
+            type="button"
+            onClick={() => {
+              setLoading(true);
+              setSearchQuery("");
+              setActionFilter("");
+              setOrgFilter("");
+              setFromDate("");
+              setToDate("");
+            }}
+            className="bg-slate-800 border border-slate-700 rounded-lg px-3 py-2 text-sm text-slate-300 hover:text-white hover:bg-slate-700 transition-colors"
+          >
+            Clear Filters
+          </button>
+        </div>
+
+        <div className="grid grid-cols-1 md:grid-cols-2 gap-3 mt-3">
+          <input
+            type="date"
+            value={fromDate}
+            onChange={(e) => {
+              setLoading(true);
+              setFromDate(e.target.value);
+            }}
+            className="bg-slate-800 border border-slate-700 rounded-lg px-3 py-2 text-sm text-white"
+          />
+          <input
+            type="date"
+            value={toDate}
+            onChange={(e) => {
+              setLoading(true);
+              setToDate(e.target.value);
+            }}
+            className="bg-slate-800 border border-slate-700 rounded-lg px-3 py-2 text-sm text-white"
+          />
+        </div>
+      </div>
+
+      <div className="mb-3">
+        <p className="text-xs text-slate-500">Showing {logs.length} log entries</p>
       </div>
 
       <div className="bg-slate-900 border border-slate-800 rounded-xl overflow-hidden">

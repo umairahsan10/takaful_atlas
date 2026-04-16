@@ -9,7 +9,7 @@ interface UserRow {
   role: string;
   isActive: boolean;
   lastLogin: string | null;
-  currentSessionToken: string | null;
+  currentSessionToken: boolean;
   createdAt: string;
 }
 
@@ -21,6 +21,7 @@ interface QuotaInfo {
 export default function AdminUsersPage() {
   const [users, setUsers] = useState<UserRow[]>([]);
   const [quota, setQuota] = useState<QuotaInfo | null>(null);
+  const [currentUserId, setCurrentUserId] = useState<string>("");
   const [loading, setLoading] = useState(true);
 
   // Create form
@@ -39,6 +40,7 @@ export default function AdminUsersPage() {
       .then((d) => {
         setUsers(d.users || []);
         setQuota(d.quota || null);
+        setCurrentUserId(d.currentUserId || "");
       })
       .catch(console.error)
       .finally(() => setLoading(false));
@@ -221,7 +223,7 @@ export default function AdminUsersPage() {
                       : "Never"}
                   </td>
                   <td className="px-5 py-3">
-                    {u.currentSessionToken && (
+                    {u.currentSessionToken && u.id !== currentUserId && (
                       <button
                         onClick={() => setForceLogoutTarget(u)}
                         className="text-xs text-red-400 hover:text-red-300 transition-colors"
