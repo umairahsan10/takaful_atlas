@@ -6,11 +6,13 @@ import Link from "next/link";
 
 interface DashStats {
   claimsToday: number;
+  claimsThisMonth: number;
   totalClaims: number;
   pendingReview: number;
   flagged: number;
   quotaUsed: number;
   quotaLimit: number;
+  billsToday: number;
   totalBills: number;
   billsThisMonth: number;
   recentClaims: {
@@ -59,13 +61,14 @@ export default function StaffDashboard() {
       <p className="text-xs font-semibold text-gray-400 uppercase tracking-wider mb-3">
         Claims
       </p>
-      <div className="grid grid-cols-1 md:grid-cols-4 gap-4 mb-6">
+      <div className="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-5 gap-4 mb-8">
         {[
           { label: "Claims Today", value: stats?.claimsToday || 0 },
+          { label: "Claims This Month", value: stats?.claimsThisMonth || 0 },
           { label: "Total Claims", value: stats?.totalClaims || 0 },
           { label: "Pending Review", value: stats?.pendingReview || 0 },
           {
-            label: "Flagged",
+            label: "Flagged Claims",
             value: stats?.flagged || 0,
             accent: (stats?.flagged || 0) > 0,
           },
@@ -90,10 +93,11 @@ export default function StaffDashboard() {
       <p className="text-xs font-semibold text-gray-400 uppercase tracking-wider mb-3">
         Bills
       </p>
-      <div className="grid grid-cols-1 md:grid-cols-4 gap-4 mb-8">
+      <div className="grid grid-cols-1 md:grid-cols-3 gap-4 mb-8">
         {[
-          { label: "Total Bills", value: stats?.totalBills || 0 },
+          { label: "Bills Today", value: stats?.billsToday || 0 },
           { label: "Bills This Month", value: stats?.billsThisMonth || 0 },
+          { label: "Total Bills", value: stats?.totalBills || 0 },
         ].map((card) => (
           <div
             key={card.label}

@@ -20,11 +20,13 @@ export async function GET() {
   const [
     totalClaims,
     claimsToday,
+    claimsThisMonth,
     pendingReview,
     flagged,
     quota,
     recentClaims,
     totalBills,
+    billsToday,
     billsThisMonth,
   ] = await Promise.all([
     prisma.claimExtraction.count({
@@ -32,6 +34,9 @@ export async function GET() {
     }),
     prisma.claimExtraction.count({
       where: { userId, orgId, createdAt: { gte: todayStart } },
+    }),
+    prisma.claimExtraction.count({
+      where: { userId, orgId, createdAt: { gte: monthStart } },
     }),
     prisma.claimExtraction.count({
       where: { userId, orgId, status: "PENDING_REVIEW" },
@@ -60,6 +65,14 @@ export async function GET() {
         userId,
         orgId,
         pipeline: "BILLS",
+        createdAt: { gte: todayStart },
+      },
+    }),
+    prisma.ocrUsageLog.count({
+      where: {
+        userId,
+        orgId,
+        pipeline: "BILLS",
         createdAt: { gte: monthStart },
       },
     }),
@@ -67,6 +80,7 @@ export async function GET() {
 
   return NextResponse.json({
     claimsToday,
+    claimsThisMonth,
     totalClaims,
     pendingReview,
     flagged,
@@ -74,6 +88,7 @@ export async function GET() {
     quotaLimit:
       (quota?.maxExtractionsPerMonth || 0) + (quota?.bonusExtractions || 0),
     totalBills,
+    billsToday,
     billsThisMonth,
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
     recentClaims: recentClaims.map((c: any) => ({

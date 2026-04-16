@@ -218,13 +218,13 @@ function formatNumber(value: number | null | undefined): string {
 
 function validationBadgeClass(status: BillValidationStatus): string {
   const classes: Record<BillValidationStatus, string> = {
-    MATCH: "bg-green-500/20 text-green-300 border-green-500/30",
-    OVERCHARGED: "bg-red-500/20 text-red-300 border-red-500/30",
-    UNDERCHARGED: "bg-yellow-500/20 text-yellow-300 border-yellow-500/30",
-    NOT_IN_RATE_LIST: "bg-slate-600/30 text-slate-200 border-slate-500/40",
-    AMBIGUOUS_MATCH: "bg-orange-500/20 text-orange-300 border-orange-500/30",
-    DATE_OUT_OF_RANGE: "bg-violet-500/20 text-violet-300 border-violet-500/30",
-    LOW_CONFIDENCE: "bg-cyan-500/20 text-cyan-300 border-cyan-500/30",
+    MATCH: "bg-emerald-50 text-emerald-700 border-emerald-200",
+    OVERCHARGED: "bg-red-50 text-red-700 border-red-200",
+    UNDERCHARGED: "bg-amber-50 text-amber-700 border-amber-200",
+    NOT_IN_RATE_LIST: "bg-gray-100 text-gray-700 border-gray-200",
+    AMBIGUOUS_MATCH: "bg-orange-50 text-orange-700 border-orange-200",
+    DATE_OUT_OF_RANGE: "bg-violet-50 text-violet-700 border-violet-200",
+    LOW_CONFIDENCE: "bg-cyan-50 text-cyan-700 border-cyan-200",
   };
 
   return classes[status];
@@ -232,11 +232,11 @@ function validationBadgeClass(status: BillValidationStatus): string {
 
 function reconciliationBadgeClass(status: ReconciliationEntry["status"]): string {
   const classes: Record<ReconciliationEntry["status"], string> = {
-    MATCH: "bg-green-500/20 text-green-300 border-green-500/30",
+    MATCH: "bg-emerald-50 text-emerald-700 border-emerald-200",
     MINOR_RECONCILIATION_DIFFERENCE:
-      "bg-yellow-500/20 text-yellow-300 border-yellow-500/30",
-    TOTAL_MISMATCH: "bg-red-500/20 text-red-300 border-red-500/30",
-    NOT_AVAILABLE: "bg-slate-600/30 text-slate-200 border-slate-500/40",
+      "bg-amber-50 text-amber-700 border-amber-200",
+    TOTAL_MISMATCH: "bg-red-50 text-red-700 border-red-200",
+    NOT_AVAILABLE: "bg-gray-100 text-gray-700 border-gray-200",
   };
 
   return classes[status];
@@ -376,7 +376,10 @@ export default function BillsValidationPage() {
   const [exceptionTypeFilter, setExceptionTypeFilter] = useState<string>("ALL");
   const [exceptionSearch, setExceptionSearch] = useState("");
 
-  const validationRows = result?.validation_results?.line_results ?? [];
+  const validationRows = useMemo(
+    () => result?.validation_results?.line_results ?? [],
+    [result?.validation_results?.line_results],
+  );
 
   const unresolvedRows = useMemo(
     () =>
@@ -715,36 +718,36 @@ export default function BillsValidationPage() {
   return (
     <div className="space-y-6">
       <div>
-        <h1 className="text-2xl font-bold text-white">Bills Validation</h1>
-        <p className="text-slate-400 text-sm mt-1">
+        <h1 className="text-2xl font-bold text-gray-900">Bills Validation</h1>
+        <p className="text-gray-600 text-sm mt-1">
           Upload a bills PDF, run extraction and validation, then review exceptions and mismatches.
         </p>
       </div>
 
       {error && (
-        <div className="bg-red-500/10 border border-red-500/30 text-red-300 rounded-xl p-4 text-sm">
+        <div className="bg-red-50 border border-red-200 text-red-700 rounded-xl p-4 text-sm">
           {error}
         </div>
       )}
 
       {result?.extraction_health?.partial_success && (
-        <div className="bg-yellow-500/10 border border-yellow-500/30 text-yellow-300 rounded-xl p-4 text-sm">
+        <div className="bg-amber-50 border border-amber-200 text-amber-700 rounded-xl p-4 text-sm">
           Partial extraction success: {result.extraction_health.failed_pages_count} page(s) had OCR issues.
           Failed pages: {result.extraction_health.failed_pages.join(", ") || "-"}.
         </div>
       )}
 
-      <div className="bg-slate-900 border border-slate-800 rounded-xl p-5 space-y-4">
+      <div className="bg-white border border-gray-200 rounded-xl p-5 space-y-4">
         <div className="grid grid-cols-1 md:grid-cols-3 gap-4 items-end">
           <div className="md:col-span-2">
-            <label className="block text-xs text-slate-400 mb-2">Bills PDF</label>
+            <label className="block text-xs text-gray-600 mb-2">Bills PDF</label>
             <input
               ref={fileInputRef}
               type="file"
               accept="application/pdf"
               onChange={handleFileSelect}
               disabled={isLoading}
-              className="w-full bg-slate-800 border border-slate-700 text-sm text-slate-200 rounded-lg px-3 py-2 file:mr-3 file:rounded-md file:border-0 file:bg-slate-700 file:px-3 file:py-1.5 file:text-slate-100"
+              className="w-full bg-gray-50 border border-gray-300 text-sm text-gray-800 rounded-lg px-3 py-2 file:mr-3 file:rounded-md file:border-0 file:bg-gray-100 file:px-3 file:py-1.5 file:text-gray-900"
             />
           </div>
 
@@ -752,21 +755,21 @@ export default function BillsValidationPage() {
             <button
               onClick={handleProcess}
               disabled={!selectedFile || isLoading}
-              className="flex-1 bg-red-500 hover:bg-red-600 disabled:bg-slate-700 disabled:text-slate-500 text-white text-sm font-semibold rounded-lg px-4 py-2 transition-colors"
+              className="flex-1 bg-red-500 hover:bg-red-600 disabled:bg-gray-100 disabled:text-gray-400 text-white text-sm font-semibold rounded-lg px-4 py-2 transition-colors"
             >
               {isLoading ? "Processing..." : "Extract + Validate"}
             </button>
             <button
               onClick={handleReset}
               disabled={isLoading}
-              className="bg-slate-700 hover:bg-slate-600 disabled:bg-slate-800 disabled:text-slate-600 text-slate-100 text-sm rounded-lg px-4 py-2 transition-colors"
+              className="bg-gray-100 hover:bg-gray-200 disabled:bg-gray-50 disabled:text-gray-400 text-gray-900 text-sm rounded-lg px-4 py-2 transition-colors"
             >
               Clear
             </button>
           </div>
         </div>
 
-        <div className="text-xs text-slate-500 flex flex-wrap gap-x-5 gap-y-1">
+        <div className="text-xs text-gray-500 flex flex-wrap gap-x-5 gap-y-1">
           <span>PDF max size: {MAX_FILE_SIZE_MB}MB</span>
           {selectedFile && <span>Selected: {selectedFile.name}</span>}
           {processingMs !== null && (
@@ -780,17 +783,17 @@ export default function BillsValidationPage() {
 
       {result && (
         <>
-          <div className="bg-slate-900 border border-slate-800 rounded-xl p-4 flex flex-wrap items-center justify-between gap-3">
+          <div className="bg-white border border-gray-200 rounded-xl p-4 flex flex-wrap items-center justify-between gap-3">
             <div>
-              <p className="text-sm font-semibold text-slate-200">Export Reviewed Output</p>
-              <p className="text-xs text-slate-500 mt-1">
+              <p className="text-sm font-semibold text-gray-800">Export Reviewed Output</p>
+              <p className="text-xs text-gray-500 mt-1">
                 Exports include latest in-memory remap and revalidation updates.
               </p>
             </div>
             <div className="flex gap-2">
               <button
                 onClick={handleExportJson}
-                className="bg-slate-700 hover:bg-slate-600 text-slate-100 text-xs font-semibold rounded-lg px-3 py-2 transition-colors"
+                className="bg-gray-100 hover:bg-gray-200 text-gray-900 text-xs font-semibold rounded-lg px-3 py-2 transition-colors"
               >
                 Export JSON
               </button>
@@ -804,21 +807,21 @@ export default function BillsValidationPage() {
           </div>
 
           <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-            <div className="bg-slate-900 border border-slate-800 rounded-xl p-4">
-              <p className="text-xs text-slate-500 mb-1">Hospital</p>
-              <p className="text-sm text-slate-100">
+            <div className="bg-white border border-gray-200 rounded-xl p-4">
+              <p className="text-xs text-gray-500 mb-1">Hospital</p>
+              <p className="text-sm text-gray-900">
                 {result.metadata.hospital_name || "-"}
               </p>
             </div>
-            <div className="bg-slate-900 border border-slate-800 rounded-xl p-4">
-              <p className="text-xs text-slate-500 mb-1">Patient</p>
-              <p className="text-sm text-slate-100">
+            <div className="bg-white border border-gray-200 rounded-xl p-4">
+              <p className="text-xs text-gray-500 mb-1">Patient</p>
+              <p className="text-sm text-gray-900">
                 {result.metadata.patient_name || "-"}
               </p>
             </div>
-            <div className="bg-slate-900 border border-slate-800 rounded-xl p-4">
-              <p className="text-xs text-slate-500 mb-1">Encounter Date</p>
-              <p className="text-sm text-slate-100">
+            <div className="bg-white border border-gray-200 rounded-xl p-4">
+              <p className="text-xs text-gray-500 mb-1">Encounter Date</p>
+              <p className="text-sm text-gray-900">
                 {result.metadata.encounter_datetime || "-"}
               </p>
             </div>
@@ -850,18 +853,18 @@ export default function BillsValidationPage() {
               ].map((item) => (
                 <div
                   key={item.label}
-                  className="bg-slate-900 border border-slate-800 rounded-xl p-3"
+                  className="bg-white border border-gray-200 rounded-xl p-3"
                 >
-                  <p className="text-[11px] text-slate-500">{item.label}</p>
-                  <p className="text-xl font-bold text-slate-100 mt-1">{item.value}</p>
+                  <p className="text-[11px] text-gray-500">{item.label}</p>
+                  <p className="text-xl font-bold text-gray-900 mt-1">{item.value}</p>
                 </div>
               ))}
             </div>
           )}
 
-          <div className="bg-slate-900 border border-slate-800 rounded-xl overflow-hidden">
-            <div className="p-5 border-b border-slate-800">
-              <h2 className="text-sm font-semibold text-slate-200 mb-4">
+          <div className="bg-white border border-gray-200 rounded-xl overflow-hidden">
+            <div className="p-5 border-b border-gray-200">
+              <h2 className="text-sm font-semibold text-gray-800 mb-4">
                 Reconciliation Summary
               </h2>
               <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-3">
@@ -875,24 +878,24 @@ export default function BillsValidationPage() {
                   return (
                     <div
                       key={entry.key}
-                      className="border border-slate-800 rounded-lg p-3 bg-slate-900/50"
+                      className="border border-gray-200 rounded-lg p-3 bg-gray-50"
                     >
                       <div className="flex items-center justify-between mb-2">
-                        <p className="text-xs text-slate-400">{entry.label}</p>
+                        <p className="text-xs text-gray-600">{entry.label}</p>
                         <span
                           className={`text-[10px] px-2 py-0.5 rounded border ${reconciliationBadgeClass(recon?.status || "NOT_AVAILABLE")}`}
                         >
                           {recon?.status || "NOT_AVAILABLE"}
                         </span>
                       </div>
-                      <p className="text-xs text-slate-500">
-                        Printed: <span className="text-slate-200">{formatCurrency(printed)}</span>
+                      <p className="text-xs text-gray-500">
+                        Printed: <span className="text-gray-800">{formatCurrency(printed)}</span>
                       </p>
-                      <p className="text-xs text-slate-500">
-                        Computed: <span className="text-slate-200">{formatCurrency(computed)}</span>
+                      <p className="text-xs text-gray-500">
+                        Computed: <span className="text-gray-800">{formatCurrency(computed)}</span>
                       </p>
-                      <p className="text-xs text-slate-500">
-                        Diff: <span className="text-slate-200">{formatCurrency(recon?.difference ?? null)}</span>
+                      <p className="text-xs text-gray-500">
+                        Diff: <span className="text-gray-800">{formatCurrency(recon?.difference ?? null)}</span>
                       </p>
                     </div>
                   );
@@ -901,30 +904,30 @@ export default function BillsValidationPage() {
             </div>
           </div>
 
-          <div className="bg-slate-900 border border-slate-800 rounded-xl overflow-hidden">
-            <div className="p-5 border-b border-slate-800 space-y-3">
+          <div className="bg-white border border-gray-200 rounded-xl overflow-hidden">
+            <div className="p-5 border-b border-gray-200 space-y-3">
               <div className="flex flex-wrap items-center justify-between gap-3">
-                <h2 className="text-sm font-semibold text-slate-200">
+                <h2 className="text-sm font-semibold text-gray-800">
                   Manual Remap + Revalidate
                 </h2>
                 <button
                   onClick={handleRevalidateRemaps}
                   disabled={!selectedRemapsCount || isRevalidating}
-                  className="bg-red-500 hover:bg-red-600 disabled:bg-slate-700 disabled:text-slate-500 text-white text-xs font-semibold rounded-lg px-3 py-2 transition-colors"
+                  className="bg-red-500 hover:bg-red-600 disabled:bg-gray-100 disabled:text-gray-400 text-white text-xs font-semibold rounded-lg px-3 py-2 transition-colors"
                 >
                   {isRevalidating
                     ? "Revalidating..."
                     : `Revalidate Selected (${selectedRemapsCount})`}
                 </button>
               </div>
-              <p className="text-xs text-slate-500">
+              <p className="text-xs text-gray-500">
                 Map unresolved rows to service codes. Revalidation only recalculates selected lines in-memory.
               </p>
             </div>
 
             <div className="overflow-auto">
               <table className="w-full text-sm min-w-[980px]">
-                <thead className="text-xs text-slate-400 border-b border-slate-800">
+                <thead className="text-xs text-gray-600 border-b border-gray-200">
                   <tr>
                     <th className="text-left px-4 py-3">Line</th>
                     <th className="text-left px-4 py-3">Service</th>
@@ -947,12 +950,12 @@ export default function BillsValidationPage() {
                       return (
                         <tr
                           key={`remap-${row.line_no}`}
-                          className="border-b border-slate-800/60 hover:bg-slate-800/30 align-top"
+                          className="border-b border-gray-200 hover:bg-gray-50 align-top"
                         >
-                          <td className="px-4 py-3 text-slate-300">
+                          <td className="px-4 py-3 text-gray-700">
                             #{row.line_no} (p{row.page_no})
                           </td>
-                          <td className="px-4 py-3 text-slate-200 max-w-[320px]">
+                          <td className="px-4 py-3 text-gray-800 max-w-[320px]">
                             {row.service_description || "-"}
                           </td>
                           <td className="px-4 py-3">
@@ -962,7 +965,7 @@ export default function BillsValidationPage() {
                               {row.status}
                             </span>
                           </td>
-                          <td className="px-4 py-3 text-slate-400 text-xs max-w-[220px]">
+                          <td className="px-4 py-3 text-gray-600 text-xs max-w-[220px]">
                             {candidateCodes.length ? candidateCodes.join(", ") : "No suggestions"}
                           </td>
                           <td className="px-4 py-3">
@@ -972,7 +975,7 @@ export default function BillsValidationPage() {
                                 onChange={(event) =>
                                   handleRemapChange(row.line_no, event.target.value)
                                 }
-                                className="bg-slate-800 border border-slate-700 text-xs text-slate-100 rounded-lg px-2 py-1.5 min-w-[180px]"
+                                className="bg-gray-50 border border-gray-300 text-xs text-gray-900 rounded-lg px-2 py-1.5 min-w-[180px]"
                               >
                                 <option value="">Select code</option>
                                 {candidateCodes.map((code) => (
@@ -987,7 +990,7 @@ export default function BillsValidationPage() {
                                   handleRemapChange(row.line_no, event.target.value)
                                 }
                                 placeholder="Custom service code"
-                                className="bg-slate-800 border border-slate-700 text-xs text-slate-100 rounded-lg px-2 py-1.5 w-[180px]"
+                                className="bg-gray-50 border border-gray-300 text-xs text-gray-900 rounded-lg px-2 py-1.5 w-[180px]"
                               />
                             </div>
                           </td>
@@ -996,7 +999,7 @@ export default function BillsValidationPage() {
                     })
                   ) : (
                     <tr>
-                      <td colSpan={5} className="px-4 py-8 text-center text-slate-500">
+                      <td colSpan={5} className="px-4 py-8 text-center text-gray-500">
                         No unresolved rows (NOT_IN_RATE_LIST / AMBIGUOUS_MATCH) to remap.
                       </td>
                     </tr>
@@ -1006,17 +1009,17 @@ export default function BillsValidationPage() {
             </div>
           </div>
 
-          <div className="bg-slate-900 border border-slate-800 rounded-xl overflow-hidden">
-            <div className="p-5 border-b border-slate-800">
-              <h2 className="text-sm font-semibold text-slate-200">Revalidation Trace</h2>
-              <p className="text-xs text-slate-500 mt-1">
+          <div className="bg-white border border-gray-200 rounded-xl overflow-hidden">
+            <div className="p-5 border-b border-gray-200">
+              <h2 className="text-sm font-semibold text-gray-800">Revalidation Trace</h2>
+              <p className="text-xs text-gray-500 mt-1">
                 Session-only change log for manual remaps and status transitions.
               </p>
             </div>
 
             <div className="overflow-auto">
               <table className="w-full text-sm min-w-[980px]">
-                <thead className="text-xs text-slate-400 border-b border-slate-800">
+                <thead className="text-xs text-gray-600 border-b border-gray-200">
                   <tr>
                     <th className="text-left px-4 py-3">Time</th>
                     <th className="text-left px-4 py-3">Line</th>
@@ -1030,26 +1033,26 @@ export default function BillsValidationPage() {
                     remapTrace.map((entry, index) => (
                       <tr
                         key={`trace-${entry.line_no}-${entry.timestamp}-${index}`}
-                        className="border-b border-slate-800/60 hover:bg-slate-800/30"
+                        className="border-b border-gray-200 hover:bg-gray-50"
                       >
-                        <td className="px-4 py-3 text-slate-400 text-xs">
+                        <td className="px-4 py-3 text-gray-600 text-xs">
                           {new Date(entry.timestamp).toLocaleString()}
                         </td>
-                        <td className="px-4 py-3 text-slate-300 text-xs">
+                        <td className="px-4 py-3 text-gray-700 text-xs">
                           #{entry.line_no} (p{entry.page_no})
                         </td>
-                        <td className="px-4 py-3 text-slate-300 text-xs">
+                        <td className="px-4 py-3 text-gray-700 text-xs">
                           {entry.selected_service_code || "-"}
                         </td>
-                        <td className="px-4 py-3 text-slate-300 text-xs">
+                        <td className="px-4 py-3 text-gray-700 text-xs">
                           {entry.previous_status || "-"} → {entry.next_status}
                         </td>
                         <td className="px-4 py-3 text-xs">
                           <span
                             className={`px-2 py-1 rounded border ${
                               entry.changed
-                                ? "bg-green-500/20 text-green-300 border-green-500/30"
-                                : "bg-slate-600/30 text-slate-200 border-slate-500/40"
+                                ? "bg-emerald-50 text-emerald-700 border-emerald-200"
+                                : "bg-gray-100 text-gray-700 border-gray-200"
                             }`}
                           >
                             {entry.changed ? "Yes" : "No"}
@@ -1059,7 +1062,7 @@ export default function BillsValidationPage() {
                     ))
                   ) : (
                     <tr>
-                      <td colSpan={5} className="px-4 py-8 text-center text-slate-500">
+                      <td colSpan={5} className="px-4 py-8 text-center text-gray-500">
                         No revalidation trace yet.
                       </td>
                     </tr>
@@ -1069,22 +1072,22 @@ export default function BillsValidationPage() {
             </div>
           </div>
 
-          <div className="bg-slate-900 border border-slate-800 rounded-xl overflow-hidden">
-            <div className="p-5 border-b border-slate-800 space-y-3">
-              <h2 className="text-sm font-semibold text-slate-200">Validated Line Items</h2>
+          <div className="bg-white border border-gray-200 rounded-xl overflow-hidden">
+            <div className="p-5 border-b border-gray-200 space-y-3">
+              <h2 className="text-sm font-semibold text-gray-800">Validated Line Items</h2>
               <div className="grid grid-cols-1 md:grid-cols-4 gap-3">
                 <input
                   value={lineSearch}
                   onChange={(event) => setLineSearch(event.target.value)}
                   placeholder="Search by service, code, reference..."
-                  className="md:col-span-2 bg-slate-800 border border-slate-700 text-sm text-slate-100 rounded-lg px-3 py-2"
+                  className="md:col-span-2 bg-gray-50 border border-gray-300 text-sm text-gray-900 rounded-lg px-3 py-2"
                 />
                 <select
                   value={sectionFilter}
                   onChange={(event) =>
                     setSectionFilter(event.target.value as "ALL" | BillSection)
                   }
-                  className="bg-slate-800 border border-slate-700 text-sm text-slate-100 rounded-lg px-3 py-2"
+                  className="bg-gray-50 border border-gray-300 text-sm text-gray-900 rounded-lg px-3 py-2"
                 >
                   {SECTION_FILTERS.map((option) => (
                     <option key={option.value} value={option.value}>
@@ -1097,7 +1100,7 @@ export default function BillsValidationPage() {
                   onChange={(event) =>
                     setStatusFilter(event.target.value as "ALL" | BillValidationStatus)
                   }
-                  className="bg-slate-800 border border-slate-700 text-sm text-slate-100 rounded-lg px-3 py-2"
+                  className="bg-gray-50 border border-gray-300 text-sm text-gray-900 rounded-lg px-3 py-2"
                 >
                   {STATUS_FILTERS.map((option) => (
                     <option key={option.value} value={option.value}>
@@ -1106,14 +1109,14 @@ export default function BillsValidationPage() {
                   ))}
                 </select>
               </div>
-              <p className="text-xs text-slate-500">
+              <p className="text-xs text-gray-500">
                 Showing {displayedRows.length} of {validationRows.length} validated lines.
               </p>
             </div>
 
             <div className="overflow-auto">
               <table className="w-full text-sm min-w-[1200px]">
-                <thead className="text-xs text-slate-400 border-b border-slate-800">
+                <thead className="text-xs text-gray-600 border-b border-gray-200">
                   <tr>
                     <th className="text-left px-4 py-3">Page</th>
                     <th className="text-left px-4 py-3">Section</th>
@@ -1133,26 +1136,26 @@ export default function BillsValidationPage() {
                     displayedRows.map((row) => (
                       <tr
                         key={`${row.page_no}-${row.line_no}-${row.service_description}`}
-                        className="border-b border-slate-800/60 hover:bg-slate-800/30 align-top"
+                        className="border-b border-gray-200 hover:bg-gray-50 align-top"
                       >
-                        <td className="px-4 py-3 text-slate-300">{row.page_no}</td>
-                        <td className="px-4 py-3 text-slate-300 capitalize">
+                        <td className="px-4 py-3 text-gray-700">{row.page_no}</td>
+                        <td className="px-4 py-3 text-gray-700 capitalize">
                           {row.section.replaceAll("_", " ")}
                         </td>
-                        <td className="px-4 py-3 text-slate-200 max-w-[320px]">
+                        <td className="px-4 py-3 text-gray-800 max-w-[320px]">
                           <p>{row.service_description || "-"}</p>
                           {row.matched_service_description && (
-                            <p className="text-[11px] text-slate-500 mt-1">
+                            <p className="text-[11px] text-gray-500 mt-1">
                               Matched: {row.matched_service_description}
                             </p>
                           )}
                         </td>
-                        <td className="px-4 py-3 text-slate-300">{row.service_code_raw || "-"}</td>
-                        <td className="px-4 py-3 text-slate-300">{formatNumber(row.qty)}</td>
-                        <td className="px-4 py-3 text-slate-300">{formatCurrency(row.billed_amount)}</td>
-                        <td className="px-4 py-3 text-slate-300">{formatCurrency(row.expected_line_amount)}</td>
-                        <td className="px-4 py-3 text-slate-300">{formatCurrency(row.amount_difference)}</td>
-                        <td className="px-4 py-3 text-slate-300">
+                        <td className="px-4 py-3 text-gray-700">{row.service_code_raw || "-"}</td>
+                        <td className="px-4 py-3 text-gray-700">{formatNumber(row.qty)}</td>
+                        <td className="px-4 py-3 text-gray-700">{formatCurrency(row.billed_amount)}</td>
+                        <td className="px-4 py-3 text-gray-700">{formatCurrency(row.expected_line_amount)}</td>
+                        <td className="px-4 py-3 text-gray-700">{formatCurrency(row.amount_difference)}</td>
+                        <td className="px-4 py-3 text-gray-700">
                           {row.percentage_deviation !== null
                             ? `${row.percentage_deviation.toFixed(2)}%`
                             : "-"}
@@ -1164,10 +1167,10 @@ export default function BillsValidationPage() {
                             {row.status}
                           </span>
                         </td>
-                        <td className="px-4 py-3 text-slate-400 max-w-[360px]">
+                        <td className="px-4 py-3 text-gray-600 max-w-[360px]">
                           <p>{row.reason}</p>
                           {row.candidates.length > 0 && (
-                            <p className="text-[11px] text-slate-500 mt-1">
+                            <p className="text-[11px] text-gray-500 mt-1">
                               Candidates: {row.candidates.map((item) => item.service_code).join(", ")}
                             </p>
                           )}
@@ -1178,7 +1181,7 @@ export default function BillsValidationPage() {
                     <tr>
                       <td
                         colSpan={11}
-                        className="px-4 py-8 text-center text-slate-500"
+                        className="px-4 py-8 text-center text-gray-500"
                       >
                         No lines match the current filters.
                       </td>
@@ -1189,20 +1192,20 @@ export default function BillsValidationPage() {
             </div>
           </div>
 
-          <div className="bg-slate-900 border border-slate-800 rounded-xl overflow-hidden">
-            <div className="p-5 border-b border-slate-800 space-y-3">
-              <h2 className="text-sm font-semibold text-slate-200">Exception Panel</h2>
+          <div className="bg-white border border-gray-200 rounded-xl overflow-hidden">
+            <div className="p-5 border-b border-gray-200 space-y-3">
+              <h2 className="text-sm font-semibold text-gray-800">Exception Panel</h2>
               <div className="grid grid-cols-1 md:grid-cols-4 gap-3">
                 <input
                   value={exceptionSearch}
                   onChange={(event) => setExceptionSearch(event.target.value)}
                   placeholder="Search note/type/section..."
-                  className="md:col-span-3 bg-slate-800 border border-slate-700 text-sm text-slate-100 rounded-lg px-3 py-2"
+                  className="md:col-span-3 bg-gray-50 border border-gray-300 text-sm text-gray-900 rounded-lg px-3 py-2"
                 />
                 <select
                   value={exceptionTypeFilter}
                   onChange={(event) => setExceptionTypeFilter(event.target.value)}
-                  className="bg-slate-800 border border-slate-700 text-sm text-slate-100 rounded-lg px-3 py-2"
+                  className="bg-gray-50 border border-gray-300 text-sm text-gray-900 rounded-lg px-3 py-2"
                 >
                   {exceptionTypeOptions.map((type) => (
                     <option key={type} value={type}>
@@ -1211,14 +1214,14 @@ export default function BillsValidationPage() {
                   ))}
                 </select>
               </div>
-              <p className="text-xs text-slate-500">
+              <p className="text-xs text-gray-500">
                 Showing {displayedExceptions.length} of {(result.exceptions || []).length} exceptions.
               </p>
             </div>
 
             <div className="overflow-auto">
               <table className="w-full text-sm min-w-[860px]">
-                <thead className="text-xs text-slate-400 border-b border-slate-800">
+                <thead className="text-xs text-gray-600 border-b border-gray-200">
                   <tr>
                     <th className="text-left px-4 py-3">Type</th>
                     <th className="text-left px-4 py-3">Page</th>
@@ -1231,21 +1234,21 @@ export default function BillsValidationPage() {
                     displayedExceptions.map((entry, index) => (
                       <tr
                         key={`${entry.type}-${entry.page_no}-${index}`}
-                        className="border-b border-slate-800/60 hover:bg-slate-800/30"
+                        className="border-b border-gray-200 hover:bg-gray-50"
                       >
-                        <td className="px-4 py-3 text-slate-200">{entry.type}</td>
-                        <td className="px-4 py-3 text-slate-300">
+                        <td className="px-4 py-3 text-gray-800">{entry.type}</td>
+                        <td className="px-4 py-3 text-gray-700">
                           {entry.page_no === null ? "-" : entry.page_no}
                         </td>
-                        <td className="px-4 py-3 text-slate-300 capitalize">
+                        <td className="px-4 py-3 text-gray-700 capitalize">
                           {(entry.section || "-").replaceAll("_", " ")}
                         </td>
-                        <td className="px-4 py-3 text-slate-400">{entry.note}</td>
+                        <td className="px-4 py-3 text-gray-600">{entry.note}</td>
                       </tr>
                     ))
                   ) : (
                     <tr>
-                      <td colSpan={4} className="px-4 py-8 text-center text-slate-500">
+                      <td colSpan={4} className="px-4 py-8 text-center text-gray-500">
                         No exceptions match the current filters.
                       </td>
                     </tr>

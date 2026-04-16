@@ -105,15 +105,15 @@ export default function AdminRateCardsPage() {
   };
 
   return (
-    <div>
-      <h1 className="text-2xl font-bold text-white mb-1">Rate Cards</h1>
-      <p className="text-slate-500 text-sm mb-8">
+    <div className="rounded-2xl border border-gray-200 bg-gray-50 p-6">
+      <h1 className="text-2xl font-bold text-gray-900 mb-1">Rate Cards</h1>
+      <p className="text-gray-500 text-sm mb-8">
         Import and manage hospital rate cards for billing cross-checks
       </p>
 
       {/* Import Section */}
-      <div className="bg-slate-900 border border-slate-800 rounded-xl p-6 mb-8">
-        <h2 className="text-sm font-semibold text-slate-300 mb-4">
+      <div className="bg-white border border-gray-200 rounded-xl p-6 mb-8 shadow-sm">
+        <h2 className="text-sm font-semibold text-gray-800 mb-4">
           Import Rate Cards
         </h2>
         <div className="flex items-center gap-4">
@@ -121,7 +121,7 @@ export default function AdminRateCardsPage() {
             ref={fileRef}
             type="file"
             accept=".csv,.xlsx,.xls"
-            className="text-sm text-slate-400 file:mr-4 file:py-2 file:px-4 file:rounded-lg file:border-0 file:text-sm file:font-medium file:bg-red-600 file:text-white hover:file:bg-red-700 file:cursor-pointer"
+            className="text-sm text-gray-600 file:mr-4 file:py-2 file:px-4 file:rounded-lg file:border file:border-gray-300 file:text-sm file:font-medium file:bg-gray-100 file:text-gray-700 hover:file:bg-gray-200 file:cursor-pointer"
           />
           <button
             onClick={handleImport}
@@ -131,7 +131,7 @@ export default function AdminRateCardsPage() {
             {importing ? "Importing..." : "Upload & Import"}
           </button>
         </div>
-        <p className="text-xs text-slate-600 mt-2">
+        <p className="text-xs text-gray-500 mt-2">
           Required columns: hospital_name, party_name, category_name,
           service_code, service_description, rate. Optional: revised_rate,
           effective_start_date, effective_end_date.
@@ -142,8 +142,8 @@ export default function AdminRateCardsPage() {
           <div
             className={`mt-4 p-4 rounded-lg text-sm ${
               importResult.success
-                ? "bg-green-500/10 border border-green-500/30 text-green-400"
-                : "bg-red-500/10 border border-red-500/30 text-red-400"
+                ? "bg-green-50 border border-green-200 text-green-700"
+                : "bg-red-50 border border-red-200 text-red-700"
             }`}
           >
             {importResult.success && importResult.summary && (
@@ -159,7 +159,7 @@ export default function AdminRateCardsPage() {
               <div className="font-semibold">{importResult.error}</div>
             )}
             {importResult.errors && importResult.errors.length > 0 && (
-              <ul className="mt-2 space-y-1 text-xs opacity-80 max-h-32 overflow-auto">
+              <ul className="mt-2 space-y-1 text-xs opacity-90 max-h-32 overflow-auto">
                 {importResult.errors.slice(0, 10).map((e, i) => (
                   <li key={i}>
                     Row {e.row}: {e.message}
@@ -183,7 +183,7 @@ export default function AdminRateCardsPage() {
             setSearch(e.target.value);
             setPage(1);
           }}
-          className="flex-1 bg-slate-800 border border-slate-700 rounded-lg px-3 py-2 text-sm text-white focus:border-red-500 focus:outline-none"
+          className="flex-1 bg-white border border-gray-300 rounded-lg px-3 py-2 text-sm text-gray-900 focus:border-red-500 focus:outline-none focus:ring-2 focus:ring-red-100"
         />
         <select
           value={hospitalFilter}
@@ -191,7 +191,7 @@ export default function AdminRateCardsPage() {
             setHospitalFilter(e.target.value);
             setPage(1);
           }}
-          className="bg-slate-800 border border-slate-700 text-sm text-white rounded-lg px-3 py-2 focus:border-red-500 focus:outline-none"
+          className="bg-white border border-gray-300 text-sm text-gray-900 rounded-lg px-3 py-2 focus:border-red-500 focus:outline-none focus:ring-2 focus:ring-red-100"
         >
           <option value="">All Hospitals</option>
           {hospitals.map((h) => (
@@ -206,7 +206,7 @@ export default function AdminRateCardsPage() {
             setPartyFilter(e.target.value);
             setPage(1);
           }}
-          className="bg-slate-800 border border-slate-700 text-sm text-white rounded-lg px-3 py-2 focus:border-red-500 focus:outline-none"
+          className="bg-white border border-gray-300 text-sm text-gray-900 rounded-lg px-3 py-2 focus:border-red-500 focus:outline-none focus:ring-2 focus:ring-red-100"
         >
           <option value="">All Parties</option>
           {parties.map((p) => (
@@ -218,18 +218,18 @@ export default function AdminRateCardsPage() {
       </div>
 
       {/* Table */}
-      <div className="bg-slate-900 border border-slate-800 rounded-xl overflow-hidden">
-        <div className="p-4 border-b border-slate-800 flex items-center justify-between">
-          <span className="text-xs text-slate-500">{total} rate cards</span>
+      <div className="bg-white border border-gray-200 rounded-xl overflow-hidden shadow-sm">
+        <div className="p-4 border-b border-gray-200 flex items-center justify-between">
+          <span className="text-xs text-gray-500">{total} rate cards</span>
         </div>
         {loading ? (
-          <div className="p-8 text-center text-slate-400 animate-pulse">
+          <div className="p-8 text-center text-gray-500 animate-pulse">
             Loading...
           </div>
         ) : (
           <>
             <table className="w-full text-sm">
-              <thead className="text-xs text-slate-500 border-b border-slate-800">
+              <thead className="text-xs text-gray-500 border-b border-gray-200">
                 <tr>
                   <th className="text-left px-4 py-3">Hospital</th>
                   <th className="text-left px-4 py-3">Party</th>
@@ -245,33 +245,33 @@ export default function AdminRateCardsPage() {
                   cards.map((c) => (
                     <tr
                       key={c.id}
-                      className="border-b border-slate-800/50 hover:bg-slate-800/30"
+                      className="border-b border-gray-200 hover:bg-gray-50"
                     >
-                      <td className="px-4 py-3 text-white text-xs">
+                      <td className="px-4 py-3 text-gray-900 text-xs">
                         {c.hospitalName}
                       </td>
-                      <td className="px-4 py-3 text-slate-400 text-xs">
+                      <td className="px-4 py-3 text-gray-600 text-xs">
                         {c.partyName}
                       </td>
-                      <td className="px-4 py-3 text-slate-300 text-xs font-mono">
+                      <td className="px-4 py-3 text-gray-700 text-xs font-mono">
                         {c.serviceCode}
                       </td>
-                      <td className="px-4 py-3 text-slate-300 text-xs max-w-50 truncate">
+                      <td className="px-4 py-3 text-gray-700 text-xs max-w-50 truncate">
                         {c.serviceDescription}
                       </td>
-                      <td className="px-4 py-3 text-white text-xs text-right">
+                      <td className="px-4 py-3 text-gray-900 text-xs text-right">
                         {c.rate.toLocaleString()}
                       </td>
                       <td className="px-4 py-3 text-xs text-right">
                         {c.revisedRate ? (
-                          <span className="text-yellow-400">
+                          <span className="text-amber-600">
                             {c.revisedRate.toLocaleString()}
                           </span>
                         ) : (
-                          <span className="text-slate-600">—</span>
+                          <span className="text-gray-400">—</span>
                         )}
                       </td>
-                      <td className="px-4 py-3 text-xs text-slate-400">
+                      <td className="px-4 py-3 text-xs text-gray-600">
                         {new Date(c.effectiveStartDate).toLocaleDateString()}
                         {c.effectiveEndDate &&
                           ` – ${new Date(c.effectiveEndDate).toLocaleDateString()}`}
@@ -282,7 +282,7 @@ export default function AdminRateCardsPage() {
                   <tr>
                     <td
                       colSpan={7}
-                      className="px-4 py-8 text-center text-slate-600"
+                      className="px-4 py-8 text-center text-gray-500"
                     >
                       No rate cards found. Import a CSV or Excel file to get
                       started.
@@ -293,21 +293,21 @@ export default function AdminRateCardsPage() {
             </table>
 
             {pages > 1 && (
-              <div className="p-4 border-t border-slate-800 flex items-center justify-between">
+              <div className="p-4 border-t border-gray-200 flex items-center justify-between">
                 <button
                   disabled={page <= 1}
                   onClick={() => setPage((p) => p - 1)}
-                  className="text-xs text-slate-400 hover:text-white disabled:opacity-30"
+                  className="text-xs text-gray-600 hover:text-gray-900 disabled:opacity-30"
                 >
                   ← Previous
                 </button>
-                <span className="text-xs text-slate-500">
+                <span className="text-xs text-gray-500">
                   Page {page} of {pages}
                 </span>
                 <button
                   disabled={page >= pages}
                   onClick={() => setPage((p) => p + 1)}
-                  className="text-xs text-slate-400 hover:text-white disabled:opacity-30"
+                  className="text-xs text-gray-600 hover:text-gray-900 disabled:opacity-30"
                 >
                   Next →
                 </button>
