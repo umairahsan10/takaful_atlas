@@ -70,7 +70,9 @@ export async function GET(req: Request) {
         totalTokens: usageAgg._sum.totalTokens ?? 0,
         extractionCount: usageAgg._count,
         claimCount,
-        quotaUsed: org.quota?.currentMonthExtractions ?? 0,
+        // monthlyQuotaUsed always reflects the quota counter (current month, all pipelines)
+        // so it stays consistent with how quota limits are enforced
+        monthlyQuotaUsed: org.quota?.currentMonthExtractions ?? 0,
         quotaLimit: org.quota
           ? org.quota.maxExtractionsPerMonth + org.quota.bonusExtractions
           : 0,

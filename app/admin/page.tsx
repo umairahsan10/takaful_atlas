@@ -7,6 +7,7 @@ interface DashboardData {
   userCount: number;
   maxUsers: number;
   extractionsThisMonth: number;
+  totalExtractions: number;
   maxExtractions: number;
   bonusExtractions: number;
   enforcement: string;
@@ -107,7 +108,7 @@ export default function AdminDashboard() {
           },
           {
             label: "Extractions (Month)",
-            value: data?.extractionsThisMonth || 0,
+            value: data?.totalExtractions || 0,
           },
           {
             label: "OCR Cost (Month)",

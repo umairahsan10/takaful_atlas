@@ -11,6 +11,8 @@ interface DashStats {
   flagged: number;
   quotaUsed: number;
   quotaLimit: number;
+  totalBills: number;
+  billsThisMonth: number;
   recentClaims: {
     id: string;
     requestId: string;
@@ -35,7 +37,7 @@ export default function StaffDashboard() {
 
   if (loading) {
     return (
-      <div className="text-slate-400 animate-pulse">Loading dashboard...</div>
+      <div className="text-gray-400 animate-pulse">Loading dashboard...</div>
     );
   }
 
@@ -48,13 +50,16 @@ export default function StaffDashboard() {
 
   return (
     <div>
-      <h1 className="text-2xl font-bold text-white mb-1">Dashboard</h1>
-      <p className="text-slate-500 text-sm mb-8">
+      <h1 className="text-2xl font-bold text-gray-900 mb-1">Dashboard</h1>
+      <p className="text-gray-500 text-sm mb-8">
         Welcome back, {session?.user?.name || session?.user?.email}
       </p>
 
-      {/* Quick Stats */}
-      <div className="grid grid-cols-1 md:grid-cols-4 gap-4 mb-8">
+      {/* Quick Stats — Claims */}
+      <p className="text-xs font-semibold text-gray-400 uppercase tracking-wider mb-3">
+        Claims
+      </p>
+      <div className="grid grid-cols-1 md:grid-cols-4 gap-4 mb-6">
         {[
           { label: "Claims Today", value: stats?.claimsToday || 0 },
           { label: "Total Claims", value: stats?.totalClaims || 0 },
@@ -67,12 +72,12 @@ export default function StaffDashboard() {
         ].map((card) => (
           <div
             key={card.label}
-            className="bg-slate-900 border border-slate-800 rounded-xl p-5"
+            className="bg-white border border-gray-200 rounded-xl p-5 shadow-sm"
           >
-            <p className="text-xs text-slate-500 mb-1">{card.label}</p>
+            <p className="text-xs text-gray-500 mb-1">{card.label}</p>
             <p
               className={`text-2xl font-bold ${
-                "accent" in card && card.accent ? "text-red-400" : "text-white"
+                "accent" in card && card.accent ? "text-red-500" : "text-gray-900"
               }`}
             >
               {card.value}
@@ -81,17 +86,36 @@ export default function StaffDashboard() {
         ))}
       </div>
 
+      {/* Quick Stats — Bills */}
+      <p className="text-xs font-semibold text-gray-400 uppercase tracking-wider mb-3">
+        Bills
+      </p>
+      <div className="grid grid-cols-1 md:grid-cols-4 gap-4 mb-8">
+        {[
+          { label: "Total Bills", value: stats?.totalBills || 0 },
+          { label: "Bills This Month", value: stats?.billsThisMonth || 0 },
+        ].map((card) => (
+          <div
+            key={card.label}
+            className="bg-white border border-gray-200 rounded-xl p-5 shadow-sm"
+          >
+            <p className="text-xs text-gray-500 mb-1">{card.label}</p>
+            <p className="text-2xl font-bold text-gray-900">{card.value}</p>
+          </div>
+        ))}
+      </div>
+
       {/* Quota Indicator */}
-      <div className="bg-slate-900 border border-slate-800 rounded-xl p-5 mb-8">
+      <div className="bg-white border border-gray-200 rounded-xl p-5 mb-8 shadow-sm">
         <div className="flex items-center justify-between mb-2">
-          <h2 className="text-sm font-semibold text-slate-300">
+          <h2 className="text-sm font-semibold text-gray-700">
             Organization Extraction Quota
           </h2>
-          <span className="text-xs text-slate-500">
+          <span className="text-xs text-gray-500">
             {stats?.quotaUsed || 0} / {stats?.quotaLimit || 0} used
           </span>
         </div>
-        <div className="w-full bg-slate-800 rounded-full h-3">
+        <div className="w-full bg-gray-200 rounded-full h-3">
           <div
             className={`h-3 rounded-full transition-all ${
               quotaPercent >= 90
@@ -106,20 +130,20 @@ export default function StaffDashboard() {
       </div>
 
       {/* Recent Claims */}
-      <div className="bg-slate-900 border border-slate-800 rounded-xl overflow-hidden">
-        <div className="p-5 border-b border-slate-800 flex items-center justify-between">
-          <h2 className="text-sm font-semibold text-slate-300">
+      <div className="bg-white border border-gray-200 rounded-xl overflow-hidden shadow-sm">
+        <div className="p-5 border-b border-gray-200 flex items-center justify-between">
+          <h2 className="text-sm font-semibold text-gray-700">
             Recent Extractions
           </h2>
           <Link
             href="/dashboard/claims"
-            className="text-xs text-red-400 hover:text-red-300"
+            className="text-xs text-red-500 hover:text-red-600"
           >
             View All →
           </Link>
         </div>
         <table className="w-full text-sm">
-          <thead className="text-xs text-slate-500 border-b border-slate-800">
+          <thead className="text-xs text-gray-400 border-b border-gray-100">
             <tr>
               <th className="text-left px-5 py-3">Request ID</th>
               <th className="text-left px-5 py-3">Status</th>
@@ -130,29 +154,29 @@ export default function StaffDashboard() {
             {stats?.recentClaims?.length ? (
               stats.recentClaims.map((c) => {
                 const statusStyle: Record<string, string> = {
-                  PENDING_REVIEW: "bg-yellow-500/20 text-yellow-400",
-                  APPROVED: "bg-green-500/20 text-green-400",
-                  FLAGGED: "bg-red-500/20 text-red-400",
-                  EXPORTED: "bg-blue-500/20 text-blue-400",
+                  PENDING_REVIEW: "bg-yellow-100 text-yellow-700",
+                  APPROVED: "bg-green-100 text-green-700",
+                  FLAGGED: "bg-red-100 text-red-700",
+                  EXPORTED: "bg-blue-100 text-blue-700",
                 };
                 return (
                   <tr
                     key={c.id}
-                    className="border-b border-slate-800/50 hover:bg-slate-800/30"
+                    className="border-b border-gray-50 hover:bg-gray-50"
                   >
-                    <td className="px-5 py-3 text-xs text-slate-300 font-mono">
+                    <td className="px-5 py-3 text-xs text-gray-700 font-mono">
                       {c.requestId.slice(0, 8)}...
                     </td>
                     <td className="px-5 py-3">
                       <span
                         className={`text-xs px-2 py-0.5 rounded ${
-                          statusStyle[c.status] || "bg-slate-700 text-slate-400"
+                          statusStyle[c.status] || "bg-gray-100 text-gray-600"
                         }`}
                       >
                         {c.status}
                       </span>
                     </td>
-                    <td className="px-5 py-3 text-xs text-slate-400">
+                    <td className="px-5 py-3 text-xs text-gray-500">
                       {new Date(c.createdAt).toLocaleString()}
                     </td>
                   </tr>
@@ -162,12 +186,12 @@ export default function StaffDashboard() {
               <tr>
                 <td
                   colSpan={3}
-                  className="px-5 py-8 text-center text-slate-600"
+                  className="px-5 py-8 text-center text-gray-400"
                 >
                   No extractions yet.{" "}
                   <Link
                     href="/claim-form"
-                    className="text-red-400 hover:text-red-300"
+                    className="text-red-500 hover:text-red-600"
                   >
                     Process your first claim →
                   </Link>

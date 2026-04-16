@@ -29,6 +29,10 @@ export default function AdminUsersPage() {
   const [creating, setCreating] = useState(false);
   const [error, setError] = useState("");
 
+  // Force logout modal
+  const [forceLogoutTarget, setForceLogoutTarget] = useState<UserRow | null>(null);
+  const [forceLoggingOut, setForceLoggingOut] = useState(false);
+
   const fetchUsers = () => {
     fetch("/api/admin/users")
       .then((r) => r.json())
@@ -67,11 +71,18 @@ export default function AdminUsersPage() {
     }
   };
 
-  const handleForceLogout = async (userId: string) => {
-    if (!confirm("Force logout this user? Their active session will end."))
-      return;
-    await fetch(`/api/admin/users/${userId}/force-logout`, { method: "POST" });
-    fetchUsers();
+  const confirmForceLogout = async () => {
+    if (!forceLogoutTarget) return;
+    setForceLoggingOut(true);
+    try {
+      await fetch(`/api/admin/users/${forceLogoutTarget.id}/force-logout`, {
+        method: "POST",
+      });
+      fetchUsers();
+    } finally {
+      setForceLoggingOut(false);
+      setForceLogoutTarget(null);
+    }
   };
 
   const atLimit = quota && quota.currentUserCount >= quota.maxUsers;
@@ -212,8 +223,8 @@ export default function AdminUsersPage() {
                   <td className="px-5 py-3">
                     {u.currentSessionToken && (
                       <button
-                        onClick={() => handleForceLogout(u.id)}
-                        className="text-xs text-red-400 hover:text-red-300"
+                        onClick={() => setForceLogoutTarget(u)}
+                        className="text-xs text-red-400 hover:text-red-300 transition-colors"
                       >
                         Force Logout
                       </button>
@@ -234,6 +245,68 @@ export default function AdminUsersPage() {
           </tbody>
         </table>
       </div>
+
+      {/* Force Logout Modal */}
+      {forceLogoutTarget && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center">
+          {/* Backdrop */}
+          <div
+            className="absolute inset-0 bg-black/60 backdrop-blur-sm"
+            onClick={() => !forceLoggingOut && setForceLogoutTarget(null)}
+          />
+          {/* Dialog */}
+          <div className="relative bg-slate-900 border border-slate-700 rounded-2xl shadow-2xl p-6 w-full max-w-md mx-4">
+            {/* Icon */}
+            <div className="flex items-center justify-center w-12 h-12 rounded-full bg-red-500/10 border border-red-500/30 mx-auto mb-4">
+              <svg
+                className="w-6 h-6 text-red-400"
+                fill="none"
+                stroke="currentColor"
+                viewBox="0 0 24 24"
+              >
+                <path
+                  strokeLinecap="round"
+                  strokeLinejoin="round"
+                  strokeWidth={2}
+                  d="M17 16l4-4m0 0l-4-4m4 4H7m6 4v1a3 3 0 01-3 3H6a3 3 0 01-3-3V7a3 3 0 013-3h4a3 3 0 013 3v1"
+                />
+              </svg>
+            </div>
+            <h2 className="text-lg font-bold text-white text-center mb-1">
+              Force Logout
+            </h2>
+            <p className="text-slate-400 text-sm text-center mb-1">
+              You are about to end the active session for
+            </p>
+            <p className="text-white font-semibold text-center mb-1">
+              {forceLogoutTarget.name}
+            </p>
+            <p className="text-slate-500 text-xs text-center mb-6">
+              {forceLogoutTarget.email}
+            </p>
+            <p className="text-slate-400 text-xs text-center mb-6 bg-slate-800 rounded-lg px-4 py-3">
+              Their session will be invalidated. They will be redirected to the
+              login page the next time they reload or navigate.
+            </p>
+            <div className="flex gap-3">
+              <button
+                onClick={() => setForceLogoutTarget(null)}
+                disabled={forceLoggingOut}
+                className="flex-1 px-4 py-2.5 rounded-lg text-sm font-medium text-slate-300 bg-slate-800 hover:bg-slate-700 transition-colors disabled:opacity-50"
+              >
+                Cancel
+              </button>
+              <button
+                onClick={confirmForceLogout}
+                disabled={forceLoggingOut}
+                className="flex-1 px-4 py-2.5 rounded-lg text-sm font-semibold text-white bg-red-600 hover:bg-red-700 transition-colors disabled:opacity-50"
+              >
+                {forceLoggingOut ? "Logging out..." : "Force Logout"}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 }

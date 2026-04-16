@@ -13,6 +13,10 @@ export async function GET() {
   const todayStart = new Date();
   todayStart.setHours(0, 0, 0, 0);
 
+  const monthStart = new Date();
+  monthStart.setDate(1);
+  monthStart.setHours(0, 0, 0, 0);
+
   const [
     totalClaims,
     claimsToday,
@@ -20,6 +24,8 @@ export async function GET() {
     flagged,
     quota,
     recentClaims,
+    totalBills,
+    billsThisMonth,
   ] = await Promise.all([
     prisma.claimExtraction.count({
       where: { userId, orgId },
@@ -46,6 +52,17 @@ export async function GET() {
         createdAt: true,
       },
     }),
+    prisma.ocrUsageLog.count({
+      where: { userId, orgId, pipeline: "BILLS" },
+    }),
+    prisma.ocrUsageLog.count({
+      where: {
+        userId,
+        orgId,
+        pipeline: "BILLS",
+        createdAt: { gte: monthStart },
+      },
+    }),
   ]);
 
   return NextResponse.json({
@@ -56,6 +73,8 @@ export async function GET() {
     quotaUsed: quota?.currentMonthExtractions || 0,
     quotaLimit:
       (quota?.maxExtractionsPerMonth || 0) + (quota?.bonusExtractions || 0),
+    totalBills,
+    billsThisMonth,
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
     recentClaims: recentClaims.map((c: any) => ({
       id: c.id,

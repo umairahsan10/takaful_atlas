@@ -1,6 +1,7 @@
 "use client";
 
 import { useState, useRef } from "react";
+import Link from "next/link";
 import { extractImageFromPDF, blobToFile } from "../utils/pdf-extractor";
 
 interface ClaimFormData {
@@ -527,6 +528,29 @@ export default function DocumentExtractor() {
   return (
     <div className="min-h-screen bg-gradient-to-br from-slate-50 via-blue-50 to-indigo-50 p-3 sm:p-4 md:p-8">
       <div className="w-full max-w-7xl mx-auto">
+        {/* Back button */}
+        <div className="mb-4">
+          <Link
+            href="/dashboard"
+            className="inline-flex items-center gap-2 text-sm text-gray-600 hover:text-gray-900 transition-colors"
+          >
+            <svg
+              className="w-4 h-4"
+              fill="none"
+              stroke="currentColor"
+              viewBox="0 0 24 24"
+            >
+              <path
+                strokeLinecap="round"
+                strokeLinejoin="round"
+                strokeWidth={2}
+                d="M15 19l-7-7 7-7"
+              />
+            </svg>
+            Back to Dashboard
+          </Link>
+        </div>
+
         {/* Header */}
         <div className="mb-6 sm:mb-8 md:mb-10">
           <div className="flex items-start sm:items-center gap-2 sm:gap-3 mb-2 sm:mb-3">

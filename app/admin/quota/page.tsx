@@ -4,6 +4,7 @@ import { useEffect, useState } from "react";
 
 interface Quota {
   maxUsers: number;
+  currentUserCount: number;
   maxExtractionsPerMonth: number;
   bonusExtractions: number;
   enforcementMode: string;
@@ -22,6 +23,7 @@ export default function AdminQuotaPage() {
       .then((d) => {
         setQuota({
           maxUsers: d.maxUsers,
+          currentUserCount: d.userCount,
           maxExtractionsPerMonth: d.maxExtractions,
           bonusExtractions: d.bonusExtractions,
           enforcementMode: d.enforcement,
@@ -54,14 +56,13 @@ export default function AdminQuotaPage() {
         Math.round(((quota.currentMonthExtractions || 0) / totalLimit) * 100),
       )
     : 0;
+
+  // User quota: actual staff users created vs max allowed
   const userUsagePercent =
     (quota.maxUsers || 0) > 0
       ? Math.min(
           100,
-          Math.round(
-            ((quota.maxUsers - (quota.maxUsers - remaining)) / quota.maxUsers) *
-              100,
-          ),
+          Math.round(((quota.currentUserCount || 0) / quota.maxUsers) * 100),
         )
       : 0;
 
@@ -138,8 +139,10 @@ export default function AdminQuotaPage() {
           </div>
           <div className="grid grid-cols-2 gap-4 text-sm">
             <div>
-              <p className="text-slate-500 text-xs">Max Staff Users</p>
-              <p className="text-white font-semibold">{quota.maxUsers}</p>
+              <p className="text-slate-500 text-xs">Staff Users</p>
+              <p className="text-white font-semibold">
+                {quota.currentUserCount} / {quota.maxUsers}
+              </p>
             </div>
             <div>
               <p className="text-slate-500 text-xs">Reset Day</p>
@@ -161,7 +164,7 @@ export default function AdminQuotaPage() {
           {[
             { label: "Enforcement", value: quota.enforcementMode },
             {
-              label: "Total Available",
+              label: "Total Assigned",
               value: totalLimit,
             },
             { label: "Reset Day", value: `Day ${quota.quotaResetDay}` },

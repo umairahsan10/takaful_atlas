@@ -4,6 +4,7 @@ import { useEffect, useState } from "react";
 
 interface Analytics {
   extractionsThisMonth: number;
+  totalExtractions: number;
   totalCost: number;
   perUserStats: {
     userId: string;
@@ -77,7 +78,7 @@ export default function AdminAnalyticsPage() {
         <div className="bg-slate-900 border border-slate-800 rounded-xl p-5">
           <p className="text-xs text-slate-500 mb-1">Total Extractions</p>
           <p className="text-2xl font-bold text-white">
-            {data?.extractionsThisMonth || 0}
+            {data?.totalExtractions || 0}
           </p>
         </div>
         <div className="bg-slate-900 border border-slate-800 rounded-xl p-5">

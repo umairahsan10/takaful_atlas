@@ -2,34 +2,33 @@
 
 import { useEffect, useState } from "react";
 
-interface Claim {
+interface BillEntry {
   id: string;
   requestId: string;
-  fileNameHash: string;
   status: string;
-  modelId: string | null;
+  totalCostUsd: number;
+  totalTokens: number;
+  processingTimeMs: number | null;
   createdAt: string;
-  crossCheckResult: Record<string, unknown> | null;
 }
 
-const STATUSES = ["PENDING_REVIEW", "APPROVED", "FLAGGED", "EXPORTED"];
-
-export default function StaffClaimsPage() {
-  const [claims, setClaims] = useState<Claim[]>([]);
+export default function MyBillsPage() {
+  const [bills, setBills] = useState<BillEntry[]>([]);
   const [total, setTotal] = useState(0);
   const [page, setPage] = useState(1);
   const [pages, setPages] = useState(1);
-  const [status, setStatus] = useState("");
+  const [statusFilter, setStatusFilter] = useState("");
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
     const params = new URLSearchParams({ page: String(page) });
-    if (status) params.set("status", status);
+    if (statusFilter) params.set("status", statusFilter);
     const controller = new AbortController();
-    fetch(`/api/dashboard/claims?${params}`, { signal: controller.signal })
+    setLoading(true);
+    fetch(`/api/dashboard/bills?${params}`, { signal: controller.signal })
       .then((r) => r.json())
       .then((d) => {
-        setClaims(d.claims || []);
+        setBills(d.bills || []);
         setTotal(d.total || 0);
         setPages(d.pages || 1);
       })
@@ -38,45 +37,40 @@ export default function StaffClaimsPage() {
       })
       .finally(() => setLoading(false));
     return () => controller.abort();
-  }, [page, status]);
+  }, [page, statusFilter]);
 
   const statusStyle: Record<string, string> = {
-    PENDING_REVIEW: "bg-yellow-100 text-yellow-700",
-    APPROVED: "bg-green-100 text-green-700",
-    FLAGGED: "bg-red-100 text-red-700",
-    EXPORTED: "bg-blue-100 text-blue-700",
+    SUCCESS: "bg-green-100 text-green-700",
+    FAILED: "bg-red-100 text-red-700",
   };
 
   return (
     <div>
       <div className="flex items-center justify-between mb-8">
         <div>
-          <h1 className="text-2xl font-bold text-gray-900">My Claims</h1>
+          <h1 className="text-2xl font-bold text-gray-900">My Bills</h1>
           <p className="text-gray-500 text-sm mt-1">
-            {total} total extraction{total !== 1 ? "s" : ""}
+            {total} bill submission{total !== 1 ? "s" : ""}
           </p>
         </div>
         <select
-          value={status}
+          value={statusFilter}
           onChange={(e) => {
-            setStatus(e.target.value);
+            setStatusFilter(e.target.value);
             setPage(1);
           }}
           className="bg-white border border-gray-300 text-sm text-gray-700 rounded-lg px-3 py-2 focus:border-red-500 focus:outline-none"
         >
           <option value="">All Statuses</option>
-          {STATUSES.map((s) => (
-            <option key={s} value={s}>
-              {s}
-            </option>
-          ))}
+          <option value="SUCCESS">Success</option>
+          <option value="FAILED">Failed</option>
         </select>
       </div>
 
       <div className="bg-white border border-gray-200 rounded-xl overflow-hidden shadow-sm">
         {loading ? (
           <div className="p-8 text-center text-gray-400 animate-pulse">
-            Loading claims...
+            Loading bills...
           </div>
         ) : (
           <>
@@ -85,54 +79,54 @@ export default function StaffClaimsPage() {
                 <tr>
                   <th className="text-left px-5 py-3">Request ID</th>
                   <th className="text-left px-5 py-3">Status</th>
-                  <th className="text-left px-5 py-3">Cross-Check</th>
-                  <th className="text-left px-5 py-3">Model</th>
+                  <th className="text-left px-5 py-3">Tokens</th>
+                  <th className="text-left px-5 py-3">Cost (USD)</th>
+                  <th className="text-left px-5 py-3">Processing</th>
                   <th className="text-left px-5 py-3">Date</th>
                 </tr>
               </thead>
               <tbody>
-                {claims.length ? (
-                  claims.map((c) => (
+                {bills.length ? (
+                  bills.map((b) => (
                     <tr
-                      key={c.id}
+                      key={b.id}
                       className="border-b border-gray-50 hover:bg-gray-50"
                     >
                       <td className="px-5 py-3 text-xs text-gray-700 font-mono">
-                        {c.requestId.slice(0, 12)}...
+                        {b.requestId.slice(0, 12)}...
                       </td>
                       <td className="px-5 py-3">
                         <span
                           className={`text-xs px-2 py-0.5 rounded ${
-                            statusStyle[c.status] || "bg-gray-100 text-gray-600"
+                            statusStyle[b.status] || "bg-gray-100 text-gray-600"
                           }`}
                         >
-                          {c.status}
+                          {b.status}
                         </span>
                       </td>
-                      <td className="px-5 py-3">
-                        {c.crossCheckResult ? (
-                          <span className="text-xs text-green-600">
-                            ✓ Checked
-                          </span>
-                        ) : (
-                          <span className="text-xs text-gray-400">—</span>
-                        )}
+                      <td className="px-5 py-3 text-xs text-gray-500">
+                        {b.totalTokens.toLocaleString()}
                       </td>
                       <td className="px-5 py-3 text-xs text-gray-500">
-                        {c.modelId || "—"}
+                        ${b.totalCostUsd.toFixed(6)}
                       </td>
                       <td className="px-5 py-3 text-xs text-gray-500">
-                        {new Date(c.createdAt).toLocaleString()}
+                        {b.processingTimeMs
+                          ? `${(b.processingTimeMs / 1000).toFixed(1)}s`
+                          : "—"}
+                      </td>
+                      <td className="px-5 py-3 text-xs text-gray-500">
+                        {new Date(b.createdAt).toLocaleString()}
                       </td>
                     </tr>
                   ))
                 ) : (
                   <tr>
                     <td
-                      colSpan={5}
+                      colSpan={6}
                       className="px-5 py-8 text-center text-gray-400"
                     >
-                      No claims found
+                      No bill submissions found
                     </td>
                   </tr>
                 )}

@@ -16,9 +16,8 @@ type GlobalAnalytics = {
     totalCost: number;
     totalTokens: number;
     extractionCount: number;
-    claimCount: number;
-    quotaUsed: number;
     quotaLimit: number;
+    monthlyQuotaUsed: number;
   }[];
 };
 
@@ -29,7 +28,6 @@ export default function SuperAdminDashboard() {
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
-    setLoading(true);
     fetch(`/api/super-admin/analytics?period=${period}&pipeline=${pipeline}`)
       .then((r) => r.json())
       .then(setData)
@@ -101,6 +99,10 @@ export default function SuperAdminDashboard() {
           <h2 className="text-lg font-semibold text-white">
             Organization Breakdown
           </h2>
+          <p className="text-xs text-slate-500 mt-1">
+            Extractions = OCR requests for the selected period &amp; pipeline.
+            Monthly Quota = total units used this month against assigned limit.
+          </p>
         </div>
         <div className="overflow-x-auto">
           <table className="w-full text-sm">
@@ -108,7 +110,7 @@ export default function SuperAdminDashboard() {
               <tr className="border-b border-slate-800 text-slate-400">
                 <th className="text-left p-4">Organization</th>
                 <th className="text-right p-4">Extractions</th>
-                <th className="text-right p-4">Quota Used</th>
+                <th className="text-right p-4">Monthly Quota</th>
                 <th className="text-right p-4">Cost (USD)</th>
                 <th className="text-right p-4">Tokens</th>
               </tr>
@@ -124,12 +126,12 @@ export default function SuperAdminDashboard() {
                   <td className="p-4 text-right">
                     <span
                       className={
-                        org.quotaUsed >= org.quotaLimit
+                        org.monthlyQuotaUsed >= org.quotaLimit
                           ? "text-red-400"
                           : "text-green-400"
                       }
                     >
-                      {org.quotaUsed} / {org.quotaLimit}
+                      {org.monthlyQuotaUsed} / {org.quotaLimit}
                     </span>
                   </td>
                   <td className="p-4 text-right">
