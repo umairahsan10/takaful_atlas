@@ -12,15 +12,17 @@ const MODEL_NAME = "Qwen3 VL 8B Instruct";
 const MODEL_CONTEXT_WINDOW_TOKENS = 128_000;
 const INPUT_USD_PER_1M_TOKENS = 0.08;
 const OUTPUT_USD_PER_1M_TOKENS = 0.5;
-const REQUEST_TIMEOUT_MS = 90_000;
-const MAX_NETWORK_RETRIES = 2;
+const REQUEST_TIMEOUT_MS = 45_000;
+const MAX_NETWORK_RETRIES = 1;
 const RETRY_AFTER_SECONDS = 3;
 const MAX_PAGE_IMAGES = 15;
 const MAX_IMAGE_SIZE_BYTES = 12 * 1024 * 1024;
 const IS_PRODUCTION = process.env.NODE_ENV === "production";
 const PROMPT_VERSION = "2026-04-07.bills.phase-e.v1";
+const ADAPTIVE_PROMPT_VERSION = "2026-04-07.bills.phase-e.v1.adaptive";
 const OCR_CONCURRENCY_DEFAULT = 1;
 const OCR_CONCURRENCY_MAX = 4;
+const MAX_ADAPTIVE_PAGE_RETRIES = 1;
 
 const RETRYABLE_NETWORK_CODES = new Set([
   "ECONNRESET",
@@ -145,8 +147,37 @@ type MergedBillExtraction = {
   exceptions: ExtractionException[];
 };
 
+type ChunkContext = {
+  chunkIndex: number;
+  totalChunks: number;
+  pageOffset: number;
+  totalPages: number;
+  isChunked: boolean;
+};
+
+type PageAttemptDetail = {
+  attempt_no: number;
+  prompt_version: string;
+  status: "SUCCESS" | "FAILED";
+  retryable: boolean;
+  failure_reason: string | null;
+};
+
+type PageProcessingDetail = {
+  page_no: number;
+  final_status: "SUCCESS" | "FAILED";
+  recovered_by_retry: boolean;
+  failure_type: string | null;
+  attempts: PageAttemptDetail[];
+};
+
 function sleep(ms: number): Promise<void> {
   return new Promise((resolve) => setTimeout(resolve, ms));
+}
+
+function computeBackoffWithJitterMs(baseMs: number): number {
+  const jitterMs = Math.floor(Math.random() * 350);
+  return baseMs + jitterMs;
 }
 
 function toSafeTokenCount(value: unknown): number {
@@ -204,6 +235,23 @@ function isRetryableNetworkError(error: unknown): boolean {
 
   const causeCode = (error as Error & { cause?: { code?: string } }).cause?.code;
   return typeof causeCode === "string" && RETRYABLE_NETWORK_CODES.has(causeCode);
+}
+
+function isRetryableAtlasStatusError(error: unknown): boolean {
+  if (!(error instanceof Error)) {
+    return false;
+  }
+
+  return /Atlas Cloud API error \((429|502|503|504)\)/.test(error.message);
+}
+
+function parseNonNegativeInteger(value: FormDataEntryValue | null, fallback: number): number {
+  if (typeof value !== "string") {
+    return fallback;
+  }
+
+  const parsed = Number.parseInt(value, 10);
+  return Number.isInteger(parsed) && parsed >= 0 ? parsed : fallback;
 }
 
 function extractMessageText(content: AtlasContent | undefined): string {
@@ -732,6 +780,25 @@ Rules:
 6) If a section header exists but no rows are visible, include that section with an empty rows array.`;
 }
 
+function buildAdaptiveBillsPrompt(
+  pageNo: number,
+  totalPages: number,
+  failureHint: string,
+): string {
+  return `${buildBillsPrompt(pageNo, totalPages)}
+
+Adaptive retry mode context:
+- Previous attempt issue: ${failureHint}
+
+Additional strict rules:
+1) Return ONLY a JSON object. No markdown, no prose, no code fences.
+2) Ensure every object and array is properly closed.
+3) Do not include trailing commas.
+4) If uncertain, set field to null instead of guessing.
+5) Preserve table row order exactly as shown on the page.
+6) If page has no bill rows, return empty sections with a valid JSON object.`;
+}
+
 async function callAtlasVision(
   base64: string,
   mimeType: string,
@@ -780,6 +847,14 @@ async function callAtlasVision(
 
       if (!response.ok) {
         const errorData = await response.json().catch(() => ({}));
+        const retryableStatus = [429, 502, 503, 504].includes(response.status);
+
+        if (retryableStatus && attempt < MAX_NETWORK_RETRIES) {
+          const backoffMs = computeBackoffWithJitterMs(1000 * (attempt + 1));
+          await sleep(backoffMs);
+          continue;
+        }
+
         throw new Error(
           `Atlas Cloud API error (${response.status}): ${JSON.stringify(errorData)}`,
         );
@@ -807,7 +882,7 @@ async function callAtlasVision(
         throw error;
       }
 
-      const backoffMs = 1000 * (attempt + 1);
+      const backoffMs = computeBackoffWithJitterMs(1000 * (attempt + 1));
       await sleep(backoffMs);
     }
   }
@@ -855,6 +930,25 @@ function pickPageImages(formData: FormData): {
     note: "Supported input is image files or page_images extracted from a PDF.",
   });
   return { files: [], warnings };
+}
+
+function resolveChunkContext(formData: FormData, pageCount: number): ChunkContext {
+  const rawTotalChunks = parseNonNegativeInteger(formData.get("total_chunks"), 1);
+  const totalChunks = rawTotalChunks > 0 ? rawTotalChunks : 1;
+  const rawChunkIndex = parseNonNegativeInteger(formData.get("chunk_index"), 0);
+  const chunkIndex = Math.min(rawChunkIndex, Math.max(totalChunks - 1, 0));
+  const pageOffset = parseNonNegativeInteger(formData.get("page_offset"), 0);
+  const declaredTotalPages = parseNonNegativeInteger(formData.get("total_pages"), 0);
+  const inferredTotalPages = pageOffset + pageCount;
+  const totalPages = Math.max(declaredTotalPages, inferredTotalPages, pageCount);
+
+  return {
+    chunkIndex,
+    totalChunks,
+    pageOffset,
+    totalPages,
+    isChunked: totalChunks > 1,
+  };
 }
 
 function resolveOcrConcurrency(): number {
@@ -909,89 +1003,209 @@ async function processPageImage(
   pageResult: PageExtractionResult;
   usageBreakdown: PerPageUsageBreakdown | null;
   atlasAttempted: boolean;
+  processingDetail: PageProcessingDetail;
 }> {
   if (!file.type.startsWith("image/")) {
+    const failureType = "UNSUPPORTED_PAGE_MIME";
+    const failureNote = `Page ${pageNo} has unsupported mime type: ${file.type}`;
+
     return {
       pageResult: buildFailedPageResult(
         pageNo,
-        "UNSUPPORTED_PAGE_MIME",
-        `Page ${pageNo} has unsupported mime type: ${file.type}`,
+        failureType,
+        failureNote,
       ),
       usageBreakdown: null,
       atlasAttempted: false,
+      processingDetail: {
+        page_no: pageNo,
+        final_status: "FAILED",
+        recovered_by_retry: false,
+        failure_type: failureType,
+        attempts: [
+          {
+            attempt_no: 1,
+            prompt_version: PROMPT_VERSION,
+            status: "FAILED",
+            retryable: false,
+            failure_reason: failureNote,
+          },
+        ],
+      },
     };
   }
 
   if (file.size > MAX_IMAGE_SIZE_BYTES) {
+    const failureType = "PAGE_TOO_LARGE";
+    const failureNote = `Page ${pageNo} exceeds ${(MAX_IMAGE_SIZE_BYTES / (1024 * 1024)).toFixed(0)}MB limit.`;
+
     return {
       pageResult: buildFailedPageResult(
         pageNo,
-        "PAGE_TOO_LARGE",
-        `Page ${pageNo} exceeds ${(MAX_IMAGE_SIZE_BYTES / (1024 * 1024)).toFixed(0)}MB limit.`,
+        failureType,
+        failureNote,
       ),
       usageBreakdown: null,
       atlasAttempted: false,
+      processingDetail: {
+        page_no: pageNo,
+        final_status: "FAILED",
+        recovered_by_retry: false,
+        failure_type: failureType,
+        attempts: [
+          {
+            attempt_no: 1,
+            prompt_version: PROMPT_VERSION,
+            status: "FAILED",
+            retryable: false,
+            failure_reason: failureNote,
+          },
+        ],
+      },
     };
   }
 
   let atlasAttempted = false;
+  const attempts: PageAttemptDetail[] = [];
+  let recoveredByRetry = false;
+  let totalInputTokens = 0;
+  let totalOutputTokens = 0;
+  let totalTokens = 0;
+  let lastFailureType: string = "PAGE_EXTRACTION_FAILED";
+  let lastFailureNote = "Unexpected page extraction error.";
 
   try {
     const buffer = await file.arrayBuffer();
     const base64 = Buffer.from(buffer).toString("base64");
-    const prompt = buildBillsPrompt(pageNo, totalPages);
-    atlasAttempted = true;
-    const atlasResult = await callAtlasVision(base64, file.type, prompt);
-    const extracted = extractJsonObject(atlasResult.content);
 
-    const inputCostUsd = tokenCostUsd(
-      atlasResult.usage.inputTokens,
-      INPUT_USD_PER_1M_TOKENS,
-    );
-    const outputCostUsd = tokenCostUsd(
-      atlasResult.usage.outputTokens,
-      OUTPUT_USD_PER_1M_TOKENS,
-    );
+    for (let attemptIndex = 0; attemptIndex <= MAX_ADAPTIVE_PAGE_RETRIES; attemptIndex += 1) {
+      const promptVersion = attemptIndex === 0 ? PROMPT_VERSION : ADAPTIVE_PROMPT_VERSION;
+      const prompt =
+        attemptIndex === 0
+          ? buildBillsPrompt(pageNo, totalPages)
+          : buildAdaptiveBillsPrompt(pageNo, totalPages, lastFailureNote);
 
-    const usageBreakdown: PerPageUsageBreakdown = {
-      page_no: pageNo,
-      input_tokens: atlasResult.usage.inputTokens,
-      output_tokens: atlasResult.usage.outputTokens,
-      total_tokens: atlasResult.usage.totalTokens,
-      input_cost_usd: inputCostUsd,
-      output_cost_usd: outputCostUsd,
-      total_cost_usd: Number((inputCostUsd + outputCostUsd).toFixed(8)),
-    };
+      try {
+        atlasAttempted = true;
+        const atlasResult = await callAtlasVision(base64, file.type, prompt);
+        const extracted = extractJsonObject(atlasResult.content);
 
-    if (!extracted) {
-      return {
-        pageResult: buildFailedPageResult(
-          pageNo,
-          "PAGE_MODEL_JSON_INVALID",
-          "Model response was not valid JSON for this page.",
-        ),
-        usageBreakdown,
-        atlasAttempted,
-      };
+        totalInputTokens += atlasResult.usage.inputTokens;
+        totalOutputTokens += atlasResult.usage.outputTokens;
+        totalTokens += atlasResult.usage.totalTokens;
+
+        if (!extracted) {
+          const canRetry = attemptIndex < MAX_ADAPTIVE_PAGE_RETRIES;
+          lastFailureType = "PAGE_MODEL_JSON_INVALID";
+          lastFailureNote = "Model response was not valid JSON for this page.";
+
+          attempts.push({
+            attempt_no: attemptIndex + 1,
+            prompt_version: promptVersion,
+            status: "FAILED",
+            retryable: canRetry,
+            failure_reason: lastFailureNote,
+          });
+
+          if (canRetry) {
+            continue;
+          }
+
+          break;
+        }
+
+        attempts.push({
+          attempt_no: attemptIndex + 1,
+          prompt_version: promptVersion,
+          status: "SUCCESS",
+          retryable: false,
+          failure_reason: null,
+        });
+
+        recoveredByRetry = attemptIndex > 0;
+        const inputCostUsd = tokenCostUsd(totalInputTokens, INPUT_USD_PER_1M_TOKENS);
+        const outputCostUsd = tokenCostUsd(totalOutputTokens, OUTPUT_USD_PER_1M_TOKENS);
+
+        return {
+          pageResult: normalizePageExtraction(extracted, pageNo),
+          usageBreakdown: {
+            page_no: pageNo,
+            input_tokens: totalInputTokens,
+            output_tokens: totalOutputTokens,
+            total_tokens: totalTokens,
+            input_cost_usd: inputCostUsd,
+            output_cost_usd: outputCostUsd,
+            total_cost_usd: Number((inputCostUsd + outputCostUsd).toFixed(8)),
+          },
+          atlasAttempted,
+          processingDetail: {
+            page_no: pageNo,
+            final_status: "SUCCESS",
+            recovered_by_retry: recoveredByRetry,
+            failure_type: null,
+            attempts,
+          },
+        };
+      } catch (error) {
+        // Network/provider retries are handled in callAtlasVision.
+        // Keep adaptive retry only for JSON-invalid responses.
+        lastFailureType = "PAGE_EXTRACTION_FAILED";
+        lastFailureNote =
+          error instanceof Error
+            ? error.message
+            : "Unexpected page extraction error.";
+
+        attempts.push({
+          attempt_no: attemptIndex + 1,
+          prompt_version: promptVersion,
+          status: "FAILED",
+          retryable: false,
+          failure_reason: lastFailureNote,
+        });
+
+        break;
+      }
     }
-
-    return {
-      pageResult: normalizePageExtraction(extracted, pageNo),
-      usageBreakdown,
-      atlasAttempted,
-    };
   } catch (error) {
-    return {
-      pageResult: buildFailedPageResult(
-        pageNo,
-        "PAGE_EXTRACTION_FAILED",
-        error instanceof Error
-          ? error.message
-          : "Unexpected page extraction error.",
-      ),
-      usageBreakdown: null,
-      atlasAttempted,
-    };
+    lastFailureType = "PAGE_EXTRACTION_FAILED";
+    lastFailureNote =
+      error instanceof Error
+        ? error.message
+        : "Unexpected page extraction error.";
+  }
+
+  const usageBreakdown = totalTokens
+    ? {
+        page_no: pageNo,
+        input_tokens: totalInputTokens,
+        output_tokens: totalOutputTokens,
+        total_tokens: totalTokens,
+        input_cost_usd: tokenCostUsd(totalInputTokens, INPUT_USD_PER_1M_TOKENS),
+        output_cost_usd: tokenCostUsd(totalOutputTokens, OUTPUT_USD_PER_1M_TOKENS),
+        total_cost_usd: Number(
+          (
+            tokenCostUsd(totalInputTokens, INPUT_USD_PER_1M_TOKENS) +
+            tokenCostUsd(totalOutputTokens, OUTPUT_USD_PER_1M_TOKENS)
+          ).toFixed(8),
+        ),
+      }
+    : null;
+
+  return {
+    pageResult: buildFailedPageResult(
+      pageNo,
+      lastFailureType,
+      lastFailureNote,
+    ),
+    usageBreakdown,
+    atlasAttempted,
+    processingDetail: {
+      page_no: pageNo,
+      final_status: "FAILED",
+      recovered_by_retry: false,
+      failure_type: lastFailureType,
+      attempts,
+    },
   }
 }
 
@@ -1076,6 +1290,8 @@ export async function POST(request: NextRequest) {
       );
     }
 
+    const chunkContext = resolveChunkContext(formData, files.length);
+
     // Bills pipeline uses strict hard-blocking against shared org quota.
     const quota = await checkExtractionQuota(session.user.orgId);
     const requestedUnits = files.length;
@@ -1111,6 +1327,7 @@ export async function POST(request: NextRequest) {
     }
 
     const pageResults = new Array<PageExtractionResult>(files.length);
+    const pageProcessingDetails = new Array<PageProcessingDetail>(files.length);
     const usageBreakdownByPage = new Map<number, PerPageUsageBreakdown>();
     const ocrConcurrency = resolveOcrConcurrency();
 
@@ -1119,9 +1336,9 @@ export async function POST(request: NextRequest) {
 
       const batchResults = await Promise.all(
         batchFiles.map((file, offset) => {
-          const pageNo = startIndex + offset + 1;
+          const pageNo = chunkContext.pageOffset + startIndex + offset + 1;
 
-          return processPageImage(file, pageNo, files.length);
+          return processPageImage(file, pageNo, chunkContext.totalPages);
         }),
       );
 
@@ -1130,6 +1347,7 @@ export async function POST(request: NextRequest) {
         const pageResult = batchResults[offset];
 
         pageResults[pageIndex] = pageResult.pageResult;
+        pageProcessingDetails[pageIndex] = pageResult.processingDetail;
         if (pageResult.atlasAttempted) {
           atlasPagesAttempted += 1;
         }
@@ -1168,28 +1386,56 @@ export async function POST(request: NextRequest) {
       ].includes(exception.type),
     );
 
+    const failedPages = Array.from(
+      new Set(pageFailures.map((failure) => failure.page_no).filter((value) => value !== null)),
+    );
+
+    const failedPageDetails = pageProcessingDetails
+      .filter((detail): detail is PageProcessingDetail => Boolean(detail))
+      .filter((detail) => detail.final_status === "FAILED")
+      .map((detail) => ({
+        page_no: detail.page_no,
+        failure_type: detail.failure_type,
+        attempts: detail.attempts.length,
+        retryable: detail.attempts.some((attempt) => attempt.retryable),
+        reasons: detail.attempts
+          .map((attempt) => attempt.failure_reason)
+          .filter((reason): reason is string => typeof reason === "string"),
+      }));
+
+    const adaptiveRetryPagesCount = pageProcessingDetails
+      .filter((detail): detail is PageProcessingDetail => Boolean(detail))
+      .filter((detail) => detail.recovered_by_retry)
+      .length;
+
+    const pageRetryAttemptsCount = pageProcessingDetails
+      .filter((detail): detail is PageProcessingDetail => Boolean(detail))
+      .reduce((sum, detail) => sum + Math.max(0, detail.attempts.length - 1), 0);
+
     let validationResults: Awaited<
       ReturnType<typeof validateBillAgainstRateList>
     > | null = null;
 
-    try {
-      validationResults = await validateBillAgainstRateList({
-        orgId: session.user.orgId,
-        metadata: merged.metadata,
-        lineItems: merged.line_items,
-        summaryTotalsPrinted: merged.summary_totals_printed,
-        summaryTotalsComputed: merged.summary_totals_computed,
-      });
-    } catch (validationError) {
-      merged.exceptions.push({
-        type: "VALIDATION_FAILED",
-        page_no: null,
-        section: null,
-        note:
-          validationError instanceof Error
-            ? validationError.message
-            : "Unexpected validation error.",
-      });
+    if (!chunkContext.isChunked) {
+      try {
+        validationResults = await validateBillAgainstRateList({
+          orgId: session.user.orgId,
+          metadata: merged.metadata,
+          lineItems: merged.line_items,
+          summaryTotalsPrinted: merged.summary_totals_printed,
+          summaryTotalsComputed: merged.summary_totals_computed,
+        });
+      } catch (validationError) {
+        merged.exceptions.push({
+          type: "VALIDATION_FAILED",
+          page_no: null,
+          section: null,
+          note:
+            validationError instanceof Error
+              ? validationError.message
+              : "Unexpected validation error.",
+        });
+      }
     }
 
     const totalInputCostUsd = tokenCostUsd(totalInputTokens, INPUT_USD_PER_1M_TOKENS);
@@ -1227,6 +1473,9 @@ export async function POST(request: NextRequest) {
       request_id: requestId,
       metadata: {
         ...merged.metadata,
+        source_pages_count: chunkContext.isChunked
+          ? chunkContext.totalPages
+          : merged.metadata.source_pages_count,
         prompt_version: PROMPT_VERSION,
         model_id: MODEL_ID,
       },
@@ -1237,20 +1486,27 @@ export async function POST(request: NextRequest) {
       validation_results: validationResults,
       exceptions: merged.exceptions,
       extraction_health: {
-        total_pages: files.length,
-        failed_pages: Array.from(
-          new Set(pageFailures.map((failure) => failure.page_no).filter((value) => value !== null)),
-        ),
-        failed_pages_count: Array.from(
-          new Set(pageFailures.map((failure) => failure.page_no).filter((value) => value !== null)),
-        ).length,
+        total_pages: chunkContext.totalPages,
+        failed_pages: failedPages,
+        failed_pages_count: failedPages.length,
         partial_success: pageFailures.length > 0,
+        failed_pages_detail: failedPageDetails,
+        page_attempts: pageProcessingDetails.filter(
+          (detail): detail is PageProcessingDetail => Boolean(detail),
+        ),
       },
       reconciliation: validationResults?.reconciliation ?? {
         mismatch_tolerance_pkr: 1,
         sections: [],
         has_major_mismatch: false,
         has_minor_mismatch: false,
+      },
+      chunk: {
+        chunk_index: chunkContext.chunkIndex,
+        total_chunks: chunkContext.totalChunks,
+        page_offset: chunkContext.pageOffset,
+        page_count: files.length,
+        is_chunked: chunkContext.isChunked,
       },
       token_usage: {
         model: MODEL_NAME,
@@ -1275,6 +1531,14 @@ export async function POST(request: NextRequest) {
       quota_usage: {
         units_charged: atlasPagesAttempted,
         unit_rule: "1 unit per page sent to Atlas",
+      },
+      runtime_metrics: {
+        processing_time_ms: Date.now() - requestStartedAt,
+        ocr_concurrency: ocrConcurrency,
+        adaptive_retry_pages_count: adaptiveRetryPagesCount,
+        page_retry_attempts_count: pageRetryAttemptsCount,
+        failed_pages_count: failedPages.length,
+        attempted_pages_count: atlasPagesAttempted,
       },
       persistence: {
         enabled: false,

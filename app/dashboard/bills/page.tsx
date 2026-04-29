@@ -1,7 +1,10 @@
 "use client";
 
 import { useMemo, useRef, useState } from "react";
-import { extractAllPagesFromPDF } from "@/app/utils/pdf-extractor";
+import {
+  type PDFPageImageResult,
+  extractAllPagesFromPDF,
+} from "@/app/utils/pdf-extractor";
 
 type BillSection =
   | "pharmacy"
@@ -126,12 +129,47 @@ type BillsExtractionResponse = {
     failed_pages: number[];
     failed_pages_count: number;
     partial_success: boolean;
+    failed_pages_detail?: Array<{
+      page_no: number;
+      failure_type: string | null;
+      attempts: number;
+      retryable: boolean;
+      reasons: string[];
+    }>;
+    page_attempts?: Array<{
+      page_no: number;
+      final_status: "SUCCESS" | "FAILED";
+      recovered_by_retry: boolean;
+      failure_type: string | null;
+      attempts: Array<{
+        attempt_no: number;
+        prompt_version: string;
+        status: "SUCCESS" | "FAILED";
+        retryable: boolean;
+        failure_reason: string | null;
+      }>;
+    }>;
+  };
+  chunk?: {
+    chunk_index: number;
+    total_chunks: number;
+    page_offset: number;
+    page_count: number;
+    is_chunked: boolean;
   };
   reconciliation: {
     mismatch_tolerance_pkr: number;
     sections: ReconciliationEntry[];
     has_major_mismatch: boolean;
     has_minor_mismatch: boolean;
+  };
+  runtime_metrics?: {
+    processing_time_ms?: number;
+    ocr_concurrency?: number;
+    adaptive_retry_pages_count?: number;
+    page_retry_attempts_count?: number;
+    failed_pages_count?: number;
+    attempted_pages_count?: number;
   };
 };
 
@@ -141,6 +179,16 @@ type ApiErrorPayload = {
   retryable?: boolean;
   retry_after_seconds?: number;
   support_hint?: string;
+  request_id?: string;
+};
+
+type UploadDiagnostics = {
+  estimatedPages: number;
+  estimatedBytes: number;
+  originalEstimatedBytes: number;
+  warnLargePayload: boolean;
+  transportFallbackApplied: boolean;
+  chunkSize: number;
 };
 
 type RemapTraceEntry = {
@@ -165,7 +213,46 @@ type RevalidateResponse = {
   updated_count: number;
 };
 
+type ValidateMergedResponse = {
+  request_id: string;
+  validation_results: BillValidationResult;
+  reconciliation: BillsExtractionResponse["reconciliation"];
+};
+
+type ChunkProgress = {
+  totalChunks: number;
+  currentChunk: number;
+  attempt: number;
+  isRetrying: boolean;
+};
+
+type ClientRunMetrics = {
+  totalChunks: number;
+  chunkSize: number;
+  chunkRetries: number;
+  chunkRetryRate: number;
+  transportFallbackApplied: boolean;
+  originalUploadBytes: number;
+  finalUploadBytes: number;
+  totalDurationMs: number;
+  serverAdaptiveRetryPages: number;
+  serverPageRetryAttempts: number;
+  serverFailedPages: number;
+  serverOcrConcurrency: number | null;
+};
+
 const MAX_FILE_SIZE_MB = 20;
+const SINGLE_REQUEST_WARN_BYTES = 18 * 1024 * 1024;
+const UPLOAD_CHUNK_PAGE_SIZE_MIN = 1;
+const UPLOAD_CHUNK_PAGE_SIZE_MAX = 2;
+const CHUNK_MAX_RETRIES = 2;
+const CHUNK_RETRY_FALLBACK_SECONDS = 3;
+const CHUNK_RETRY_JITTER_MS = 400;
+const TRANSPORT_FALLBACK_TRIGGER_BYTES = 26 * 1024 * 1024;
+const TRANSPORT_TARGET_MAX_PAGE_BYTES = 10 * 1024 * 1024;
+const TRANSPORT_JPEG_QUALITY = 0.88;
+const TRANSPORT_MAX_DIMENSION_PX = 2800;
+const TRANSPORT_MIN_SCALE = 0.72;
 const SECTION_FILTERS: Array<{ value: "ALL" | BillSection; label: string }> = [
   { value: "ALL", label: "All Sections" },
   { value: "pharmacy", label: "Pharmacy" },
@@ -214,6 +301,452 @@ function formatNumber(value: number | null | undefined): string {
     return "-";
   }
   return String(value);
+}
+
+function formatBytes(bytes: number): string {
+  if (!Number.isFinite(bytes) || bytes <= 0) {
+    return "0 B";
+  }
+
+  const units = ["B", "KB", "MB", "GB"];
+  const unitIndex = Math.min(Math.floor(Math.log(bytes) / Math.log(1024)), units.length - 1);
+  const value = bytes / Math.pow(1024, unitIndex);
+  const decimals = unitIndex === 0 ? 0 : unitIndex === 1 ? 1 : 2;
+
+  return `${value.toFixed(decimals)} ${units[unitIndex]}`;
+}
+
+function sanitizeResponsePreview(rawText: string, maxLength = 180): string {
+  const normalized = rawText.replace(/\s+/g, " ").trim();
+  if (!normalized) {
+    return "";
+  }
+
+  if (normalized.length <= maxLength) {
+    return normalized;
+  }
+
+  return `${normalized.slice(0, maxLength)}...`;
+}
+
+function hasObjectShape(value: unknown): value is Record<string, unknown> {
+  return typeof value === "object" && value !== null;
+}
+
+function isApiErrorPayload(value: unknown): value is ApiErrorPayload {
+  return hasObjectShape(value) && (typeof value.error === "string" || typeof value.details === "string");
+}
+
+function isBillsExtractionResponse(value: unknown): value is BillsExtractionResponse {
+  return (
+    hasObjectShape(value) &&
+    typeof value.request_id === "string" &&
+    Array.isArray(value.line_items) &&
+    hasObjectShape(value.metadata)
+  );
+}
+
+function isRevalidateResponse(value: unknown): value is RevalidateResponse {
+  return (
+    hasObjectShape(value) &&
+    typeof value.request_id === "string" &&
+    Array.isArray(value.updated_line_results) &&
+    Array.isArray(value.remap_trace)
+  );
+}
+
+async function parseApiResponse<T>(response: Response): Promise<{
+  payload: T | null;
+  rawText: string;
+  contentType: string;
+}> {
+  const contentType = (response.headers.get("content-type") ?? "").toLowerCase();
+  const rawText = await response.text();
+  const trimmed = rawText.trim();
+
+  if (!trimmed) {
+    return {
+      payload: null,
+      rawText,
+      contentType,
+    };
+  }
+
+  const shouldParseJson =
+    contentType.includes("application/json") ||
+    trimmed.startsWith("{") ||
+    trimmed.startsWith("[");
+
+  if (!shouldParseJson) {
+    return {
+      payload: null,
+      rawText,
+      contentType,
+    };
+  }
+
+  try {
+    const payload = JSON.parse(trimmed) as T;
+    return {
+      payload,
+      rawText,
+      contentType,
+    };
+  } catch {
+    return {
+      payload: null,
+      rawText,
+      contentType,
+    };
+  }
+}
+
+function buildApiErrorMessage(
+  response: Response,
+  payload: ApiErrorPayload | null,
+  rawText: string,
+  fallback: string,
+): string {
+  const statusContext = `HTTP ${response.status}${response.statusText ? ` ${response.statusText}` : ""}`;
+
+  if (payload) {
+    const message = payload.error ?? fallback;
+    const details = payload.details ? ` ${payload.details}` : "";
+    const retryHint = payload.retryable
+      ? ` Retry after ${payload.retry_after_seconds ?? 3}s.`
+      : payload.support_hint
+        ? ` ${payload.support_hint}`
+        : "";
+    const requestIdHint = payload.request_id ? ` Request ID: ${payload.request_id}.` : "";
+
+    return `${message} (${statusContext}).${details}${retryHint}${requestIdHint}`.trim();
+  }
+
+  const preview = sanitizeResponsePreview(rawText);
+  const largeRequestHint = response.status === 413
+    ? " The upload payload is too large for a single request."
+    : "";
+
+  return `${fallback} (${statusContext}).${largeRequestHint}${preview ? ` Server response: ${preview}` : ""}`.trim();
+}
+
+function sleep(ms: number): Promise<void> {
+  return new Promise((resolve) => setTimeout(resolve, ms));
+}
+
+function resolveDynamicChunkSize(totalBytes: number, pageCount: number): number {
+  if (pageCount >= 5) {
+    return UPLOAD_CHUNK_PAGE_SIZE_MIN;
+  }
+
+  if (pageCount <= UPLOAD_CHUNK_PAGE_SIZE_MIN) {
+    return UPLOAD_CHUNK_PAGE_SIZE_MIN;
+  }
+
+  const avgPageBytes = totalBytes / Math.max(pageCount, 1);
+  if (totalBytes >= 34 * 1024 * 1024 || avgPageBytes >= 5 * 1024 * 1024) {
+    return UPLOAD_CHUNK_PAGE_SIZE_MIN;
+  }
+
+  return UPLOAD_CHUNK_PAGE_SIZE_MAX;
+}
+
+function computeChunkRetryDelayMs(retryAfterSeconds: number, attempt: number): number {
+  const baseMs = Math.max(1, retryAfterSeconds) * 1000;
+  const exponentialFactor = Math.pow(2, Math.max(attempt, 0));
+  const jitterMs = Math.floor(Math.random() * CHUNK_RETRY_JITTER_MS);
+  return baseMs * exponentialFactor + jitterMs;
+}
+
+async function maybeCompressBlobForTransport(blob: Blob): Promise<Blob | null> {
+  if (typeof window === "undefined") {
+    return null;
+  }
+
+  let bitmap: ImageBitmap;
+  try {
+    bitmap = await createImageBitmap(blob);
+  } catch {
+    return null;
+  }
+  const maxDimension = Math.max(bitmap.width, bitmap.height);
+  const rawScale = Math.min(1, TRANSPORT_MAX_DIMENSION_PX / Math.max(maxDimension, 1));
+  const guardedScale = Math.max(rawScale, TRANSPORT_MIN_SCALE);
+
+  const canvas = document.createElement("canvas");
+  canvas.width = Math.max(1, Math.round(bitmap.width * guardedScale));
+  canvas.height = Math.max(1, Math.round(bitmap.height * guardedScale));
+
+  const context = canvas.getContext("2d", { alpha: false });
+  if (!context) {
+    bitmap.close();
+    return null;
+  }
+
+  context.imageSmoothingEnabled = true;
+  context.imageSmoothingQuality = "high";
+  context.drawImage(bitmap, 0, 0, canvas.width, canvas.height);
+  bitmap.close();
+
+  const jpegBlob = await new Promise<Blob | null>((resolve) => {
+    canvas.toBlob(
+      (compressed) => resolve(compressed),
+      "image/jpeg",
+      TRANSPORT_JPEG_QUALITY,
+    );
+  });
+
+  if (!jpegBlob) {
+    return null;
+  }
+
+  // Keep quality guardrail: accept only if meaningful size reduction.
+  if (jpegBlob.size >= blob.size * 0.98) {
+    return null;
+  }
+
+  return jpegBlob;
+}
+
+async function optimizePagesForTransport(
+  pages: PDFPageImageResult[],
+): Promise<{
+  pages: PDFPageImageResult[];
+  originalBytes: number;
+  finalBytes: number;
+  applied: boolean;
+}> {
+  const originalBytes = pages.reduce((sum, page) => sum + page.imageBlob.size, 0);
+  const hasOversizedPage = pages.some(
+    (page) => page.imageBlob.size > TRANSPORT_TARGET_MAX_PAGE_BYTES,
+  );
+
+  const shouldOptimize =
+    originalBytes >= TRANSPORT_FALLBACK_TRIGGER_BYTES || hasOversizedPage;
+
+  if (!shouldOptimize) {
+    return {
+      pages,
+      originalBytes,
+      finalBytes: originalBytes,
+      applied: false,
+    };
+  }
+
+  let applied = false;
+  const optimizedPages: PDFPageImageResult[] = [];
+
+  for (const page of pages) {
+    const shouldCompressPage =
+      page.imageBlob.size > TRANSPORT_TARGET_MAX_PAGE_BYTES ||
+      originalBytes >= TRANSPORT_FALLBACK_TRIGGER_BYTES;
+
+    if (!shouldCompressPage) {
+      optimizedPages.push(page);
+      continue;
+    }
+
+    const compressedBlob = await maybeCompressBlobForTransport(page.imageBlob);
+    if (!compressedBlob) {
+      optimizedPages.push(page);
+      continue;
+    }
+
+    applied = true;
+    optimizedPages.push({
+      ...page,
+      imageBlob: compressedBlob,
+      format: compressedBlob.type.includes("jpeg") ? "jpeg" : page.format,
+    });
+  }
+
+  const finalBytes = optimizedPages.reduce((sum, page) => sum + page.imageBlob.size, 0);
+
+  return {
+    pages: optimizedPages,
+    originalBytes,
+    finalBytes,
+    applied,
+  };
+}
+
+function emptySummaryTotals(): SummaryTotals {
+  return {
+    consultations: null,
+    pharmacy: null,
+    laboratory: null,
+    radiology: null,
+    direct_services: null,
+    opd_services: null,
+    grand_total: null,
+  };
+}
+
+function emptyReconciliation(): BillsExtractionResponse["reconciliation"] {
+  return {
+    mismatch_tolerance_pkr: 1,
+    sections: [],
+    has_major_mismatch: false,
+    has_minor_mismatch: false,
+  };
+}
+
+function isValidateMergedResponse(value: unknown): value is ValidateMergedResponse {
+  return (
+    hasObjectShape(value) &&
+    typeof value.request_id === "string" &&
+    hasObjectShape(value.validation_results) &&
+    hasObjectShape(value.reconciliation)
+  );
+}
+
+function pickFirstNonEmpty(
+  ...values: Array<string | number | null | undefined>
+): string | number | null {
+  for (const value of values) {
+    if (typeof value === "number" && Number.isFinite(value)) {
+      return value;
+    }
+
+    if (typeof value === "string" && value.trim().length > 0) {
+      return value;
+    }
+  }
+
+  return null;
+}
+
+function mergePrintedTotals(chunks: BillsExtractionResponse[]): SummaryTotals {
+  const merged = emptySummaryTotals();
+
+  for (const key of TOTAL_KEYS.map((entry) => entry.key)) {
+    for (const chunk of chunks) {
+      const candidate = chunk.summary_totals_printed[key];
+      if (candidate !== null && candidate !== undefined) {
+        merged[key] = candidate;
+        break;
+      }
+    }
+  }
+
+  return merged;
+}
+
+function computeSummaryFromLines(lineItems: BillLineItem[]): SummaryTotals {
+  const summary = emptySummaryTotals();
+
+  for (const line of lineItems) {
+    const amount = line.line_amount ?? 0;
+    if (line.section === "consultations") {
+      summary.consultations = (summary.consultations ?? 0) + amount;
+    } else if (line.section === "pharmacy") {
+      summary.pharmacy = (summary.pharmacy ?? 0) + amount;
+    } else if (line.section === "laboratory") {
+      summary.laboratory = (summary.laboratory ?? 0) + amount;
+    } else if (line.section === "radiology") {
+      summary.radiology = (summary.radiology ?? 0) + amount;
+    } else if (line.section === "direct_services") {
+      summary.direct_services = (summary.direct_services ?? 0) + amount;
+    } else if (line.section === "opd_services") {
+      summary.opd_services = (summary.opd_services ?? 0) + amount;
+    }
+  }
+
+  summary.grand_total = Number(
+    lineItems.reduce((sum, line) => sum + (line.line_amount ?? 0), 0).toFixed(2),
+  );
+
+  for (const key of TOTAL_KEYS.map((entry) => entry.key)) {
+    if (summary[key] !== null) {
+      summary[key] = Number((summary[key] ?? 0).toFixed(2));
+    }
+  }
+
+  return summary;
+}
+
+function mergeChunkResponses(chunks: BillsExtractionResponse[]): BillsExtractionResponse {
+  const orderedChunks = [...chunks].sort((left, right) => {
+    const leftIndex = left.chunk?.chunk_index ?? 0;
+    const rightIndex = right.chunk?.chunk_index ?? 0;
+    return leftIndex - rightIndex;
+  });
+
+  const mergedLineItems = orderedChunks
+    .flatMap((chunk) => chunk.line_items)
+    .sort((left, right) => {
+      if (left.page_no !== right.page_no) {
+        return left.page_no - right.page_no;
+      }
+      return left.line_no - right.line_no;
+    })
+    .map((line, index) => ({
+      ...line,
+      line_no: index + 1,
+    }));
+
+  const mergedExceptions = orderedChunks
+    .flatMap((chunk) => chunk.exceptions)
+    .sort((left, right) => {
+      const leftPage = left.page_no ?? Number.MAX_SAFE_INTEGER;
+      const rightPage = right.page_no ?? Number.MAX_SAFE_INTEGER;
+      return leftPage - rightPage;
+    });
+
+  const failedPages = Array.from(
+    new Set(
+      orderedChunks.flatMap((chunk) =>
+        chunk.extraction_health?.failed_pages ?? [],
+      ),
+    ),
+  ).sort((left, right) => left - right);
+
+  const firstChunk = orderedChunks[0];
+  const lastChunk = orderedChunks[orderedChunks.length - 1];
+  const totalPages = Math.max(
+    ...orderedChunks.map((chunk) => chunk.extraction_health?.total_pages ?? 0),
+    ...orderedChunks.map((chunk) => chunk.metadata.source_pages_count ?? 0),
+    mergedLineItems.reduce((max, line) => Math.max(max, line.page_no), 0),
+  );
+
+  return {
+    request_id: lastChunk.request_id,
+    metadata: {
+      hospital_name: pickFirstNonEmpty(
+        firstChunk.metadata.hospital_name,
+        ...orderedChunks.map((chunk) => chunk.metadata.hospital_name),
+      ) as string | null,
+      patient_name: pickFirstNonEmpty(
+        firstChunk.metadata.patient_name,
+        ...orderedChunks.map((chunk) => chunk.metadata.patient_name),
+      ) as string | null,
+      party_name: pickFirstNonEmpty(
+        firstChunk.metadata.party_name,
+        ...orderedChunks.map((chunk) => chunk.metadata.party_name),
+      ) as string | null,
+      encounter_datetime: pickFirstNonEmpty(
+        firstChunk.metadata.encounter_datetime,
+        ...orderedChunks.map((chunk) => chunk.metadata.encounter_datetime),
+      ) as string | null,
+      source_pages_count: totalPages || undefined,
+      prompt_version: pickFirstNonEmpty(
+        firstChunk.metadata.prompt_version,
+        ...orderedChunks.map((chunk) => chunk.metadata.prompt_version),
+      ) as string | null,
+    },
+    summary_totals_printed: mergePrintedTotals(orderedChunks),
+    summary_totals_computed: computeSummaryFromLines(mergedLineItems),
+    line_items: mergedLineItems,
+    validation_results: null,
+    exceptions: mergedExceptions,
+    extraction_health: {
+      total_pages: totalPages,
+      failed_pages: failedPages,
+      failed_pages_count: failedPages.length,
+      partial_success: failedPages.length > 0,
+    },
+    reconciliation: emptyReconciliation(),
+  };
 }
 
 function validationBadgeClass(status: BillValidationStatus): string {
@@ -366,6 +899,9 @@ export default function BillsValidationPage() {
   const [error, setError] = useState<string | null>(null);
   const [result, setResult] = useState<BillsExtractionResponse | null>(null);
   const [processingMs, setProcessingMs] = useState<number | null>(null);
+  const [uploadDiagnostics, setUploadDiagnostics] = useState<UploadDiagnostics | null>(null);
+  const [chunkProgress, setChunkProgress] = useState<ChunkProgress | null>(null);
+  const [runMetrics, setRunMetrics] = useState<ClientRunMetrics | null>(null);
   const [remapDraft, setRemapDraft] = useState<Record<number, string>>({});
   const [remapTrace, setRemapTrace] = useState<RemapTraceEntry[]>([]);
 
@@ -467,6 +1003,7 @@ export default function BillsValidationPage() {
     }
 
     setError(null);
+    setUploadDiagnostics(null);
     setSelectedFile(file);
   };
 
@@ -475,6 +1012,9 @@ export default function BillsValidationPage() {
     setResult(null);
     setError(null);
     setProcessingMs(null);
+    setUploadDiagnostics(null);
+    setChunkProgress(null);
+    setRunMetrics(null);
     setRemapDraft({});
     setRemapTrace([]);
     setLineSearch("");
@@ -498,45 +1038,192 @@ export default function BillsValidationPage() {
     setResult(null);
     setRemapDraft({});
     setRemapTrace([]);
+    setChunkProgress(null);
+    setRunMetrics(null);
     const startedAt = Date.now();
 
     try {
-      const pages = await extractAllPagesFromPDF(selectedFile);
+      const extractedPages = await extractAllPagesFromPDF(selectedFile);
+      const transportOptimized = await optimizePagesForTransport(extractedPages);
+      const pages = transportOptimized.pages;
+      const estimatedBytes = transportOptimized.finalBytes;
+      const chunkSize = resolveDynamicChunkSize(estimatedBytes, pages.length);
 
-      const formData = new FormData();
-      for (const page of pages) {
-        const pageFile = new File(
-          [page.imageBlob],
-          `page-${String(page.pageNumber).padStart(3, "0")}.png`,
-          { type: page.imageBlob.type || "image/png" },
-        );
-        formData.append("page_images", pageFile);
-      }
-
-      const response = await fetch("/api/extract/bills", {
-        method: "POST",
-        body: formData,
+      setUploadDiagnostics({
+        estimatedPages: pages.length,
+        estimatedBytes,
+        originalEstimatedBytes: transportOptimized.originalBytes,
+        warnLargePayload: estimatedBytes >= SINGLE_REQUEST_WARN_BYTES,
+        transportFallbackApplied: transportOptimized.applied,
+        chunkSize,
       });
 
-      const payload = (await response.json()) as BillsExtractionResponse | ApiErrorPayload;
+      const totalChunks = Math.max(1, Math.ceil(pages.length / chunkSize));
+      const chunkResponses: BillsExtractionResponse[] = [];
+      let chunkRetryCount = 0;
 
-      if (!response.ok) {
-        const message =
-          payload && "error" in payload && payload.error
-            ? payload.error
-            : "Bills extraction failed.";
-        const details = payload && "details" in payload ? payload.details : null;
-        const retryHint =
-          payload && "retryable" in payload && payload.retryable
-            ? ` Retry after ${payload.retry_after_seconds ?? 3}s.`
-            : payload && "support_hint" in payload && payload.support_hint
-              ? ` ${payload.support_hint}`
-              : "";
-        throw new Error(`${details ? `${message} ${details}` : message}${retryHint}`.trim());
+      for (let chunkIndex = 0; chunkIndex < totalChunks; chunkIndex += 1) {
+        const chunkStart = chunkIndex * chunkSize;
+        const chunkPages = pages.slice(chunkStart, chunkStart + chunkSize);
+
+        let chunkCompleted = false;
+        for (let attempt = 0; attempt <= CHUNK_MAX_RETRIES; attempt += 1) {
+          setChunkProgress({
+            totalChunks,
+            currentChunk: chunkIndex + 1,
+            attempt: attempt + 1,
+            isRetrying: attempt > 0,
+          });
+
+          const formData = new FormData();
+          for (const page of chunkPages) {
+            const pageFile = new File(
+              [page.imageBlob],
+              `page-${String(page.pageNumber).padStart(3, "0")}.png`,
+              { type: page.imageBlob.type || "image/png" },
+            );
+            formData.append("page_images", pageFile);
+          }
+
+          formData.append("chunk_index", String(chunkIndex));
+          formData.append("total_chunks", String(totalChunks));
+          formData.append("page_offset", String(chunkStart));
+          formData.append("total_pages", String(pages.length));
+
+          const response = await fetch("/api/extract/bills", {
+            method: "POST",
+            body: formData,
+          });
+
+          const { payload, rawText } = await parseApiResponse<unknown>(response);
+          const errorPayload = isApiErrorPayload(payload) ? payload : null;
+
+          if (!response.ok) {
+            const isRetryable = Boolean(errorPayload?.retryable);
+            const hasAttemptsLeft = attempt < CHUNK_MAX_RETRIES;
+
+            if (isRetryable && hasAttemptsLeft) {
+              const retryAfterSeconds = errorPayload?.retry_after_seconds ?? CHUNK_RETRY_FALLBACK_SECONDS;
+              const delayMs = computeChunkRetryDelayMs(retryAfterSeconds, attempt);
+              chunkRetryCount += 1;
+              await sleep(delayMs);
+              continue;
+            }
+
+            throw new Error(
+              buildApiErrorMessage(
+                response,
+                errorPayload,
+                rawText,
+                `Bills extraction failed on chunk ${chunkIndex + 1}/${totalChunks}.`,
+              ),
+            );
+          }
+
+          if (!isBillsExtractionResponse(payload)) {
+            throw new Error(
+              buildApiErrorMessage(
+                response,
+                errorPayload,
+                rawText,
+                `Chunk ${chunkIndex + 1}/${totalChunks} succeeded but returned an unexpected response shape.`,
+              ),
+            );
+          }
+
+          chunkResponses.push(payload);
+          chunkCompleted = true;
+          break;
+        }
+
+        if (!chunkCompleted) {
+          throw new Error(`Failed to upload chunk ${chunkIndex + 1}/${totalChunks} after retries.`);
+        }
       }
 
-      setResult(payload as BillsExtractionResponse);
-      setProcessingMs(Date.now() - startedAt);
+      let finalResult =
+        chunkResponses.length === 1
+          ? chunkResponses[0]
+          : mergeChunkResponses(chunkResponses);
+
+      if (chunkResponses.length > 1) {
+        const validateResponse = await fetch("/api/extract/bills/validate", {
+          method: "POST",
+          headers: {
+            "Content-Type": "application/json",
+          },
+          body: JSON.stringify({
+            metadata: finalResult.metadata,
+            summary_totals_printed: finalResult.summary_totals_printed,
+            summary_totals_computed: finalResult.summary_totals_computed,
+            line_items: finalResult.line_items,
+          }),
+        });
+
+        const { payload: validatePayload, rawText: validateRawText } = await parseApiResponse<unknown>(validateResponse);
+        const validateErrorPayload = isApiErrorPayload(validatePayload)
+          ? validatePayload
+          : null;
+
+        if (!validateResponse.ok) {
+          throw new Error(
+            buildApiErrorMessage(
+              validateResponse,
+              validateErrorPayload,
+              validateRawText,
+              "Merged validation failed.",
+            ),
+          );
+        }
+
+        if (!isValidateMergedResponse(validatePayload)) {
+          throw new Error(
+            buildApiErrorMessage(
+              validateResponse,
+              validateErrorPayload,
+              validateRawText,
+              "Merged validation returned an unexpected response shape.",
+            ),
+          );
+        }
+
+        finalResult = {
+          ...finalResult,
+          validation_results: validatePayload.validation_results,
+          reconciliation: validatePayload.reconciliation,
+        };
+      }
+
+      setResult(finalResult);
+      const totalDurationMs = Date.now() - startedAt;
+      const serverAdaptiveRetryPages = chunkResponses.reduce(
+        (sum, chunk) => sum + (chunk.runtime_metrics?.adaptive_retry_pages_count ?? 0),
+        0,
+      );
+      const serverPageRetryAttempts = chunkResponses.reduce(
+        (sum, chunk) => sum + (chunk.runtime_metrics?.page_retry_attempts_count ?? 0),
+        0,
+      );
+      const serverOcrConcurrency =
+        chunkResponses.find((chunk) => typeof chunk.runtime_metrics?.ocr_concurrency === "number")
+          ?.runtime_metrics?.ocr_concurrency ?? null;
+
+      setRunMetrics({
+        totalChunks,
+        chunkSize,
+        chunkRetries: chunkRetryCount,
+        chunkRetryRate: Number((chunkRetryCount / Math.max(totalChunks, 1)).toFixed(2)),
+        transportFallbackApplied: transportOptimized.applied,
+        originalUploadBytes: transportOptimized.originalBytes,
+        finalUploadBytes: transportOptimized.finalBytes,
+        totalDurationMs,
+        serverAdaptiveRetryPages,
+        serverPageRetryAttempts,
+        serverFailedPages: finalResult.extraction_health?.failed_pages_count ?? 0,
+        serverOcrConcurrency,
+      });
+
+      setProcessingMs(totalDurationMs);
     } catch (err) {
       setError(
         err instanceof Error
@@ -544,8 +1231,10 @@ export default function BillsValidationPage() {
           : "Failed to process bill document.",
       );
       setProcessingMs(null);
+      setRunMetrics(null);
     } finally {
       setIsLoading(false);
+      setChunkProgress(null);
     }
   };
 
@@ -658,20 +1347,32 @@ export default function BillsValidationPage() {
         }),
       });
 
-      const payload = (await response.json()) as
-        | RevalidateResponse
-        | { error?: string; details?: string };
+      const { payload, rawText } = await parseApiResponse<unknown>(response);
+      const errorPayload = isApiErrorPayload(payload) ? payload : null;
 
       if (!response.ok) {
-        const message =
-          payload && "error" in payload && payload.error
-            ? payload.error
-            : "Targeted revalidation failed.";
-        const details = payload && "details" in payload ? payload.details : null;
-        throw new Error(details ? `${message} ${details}` : message);
+        throw new Error(
+          buildApiErrorMessage(
+            response,
+            errorPayload,
+            rawText,
+            "Targeted revalidation failed.",
+          ),
+        );
       }
 
-      const resolvedPayload = payload as RevalidateResponse;
+      if (!isRevalidateResponse(payload)) {
+        throw new Error(
+          buildApiErrorMessage(
+            response,
+            errorPayload,
+            rawText,
+            "Revalidation succeeded but returned an unexpected response shape.",
+          ),
+        );
+      }
+
+      const resolvedPayload = payload;
       const updatedByLineNo = new Map(
         resolvedPayload.updated_line_results.map((line) => [line.line_no, line]),
       );
@@ -772,11 +1473,42 @@ export default function BillsValidationPage() {
         <div className="text-xs text-gray-500 flex flex-wrap gap-x-5 gap-y-1">
           <span>PDF max size: {MAX_FILE_SIZE_MB}MB</span>
           {selectedFile && <span>Selected: {selectedFile.name}</span>}
+          {uploadDiagnostics && (
+            <span>
+              Estimated upload: {formatBytes(uploadDiagnostics.estimatedBytes)} ({uploadDiagnostics.estimatedPages} page images)
+            </span>
+          )}
+          {uploadDiagnostics?.transportFallbackApplied && (
+            <span>
+              Transport fallback applied: {formatBytes(uploadDiagnostics.originalEstimatedBytes)} to {formatBytes(uploadDiagnostics.estimatedBytes)}
+            </span>
+          )}
+          {uploadDiagnostics && (
+            <span>Chunk size: {uploadDiagnostics.chunkSize} page(s)</span>
+          )}
           {processingMs !== null && (
             <span>Processed in {(processingMs / 1000).toFixed(2)}s</span>
           )}
+          {chunkProgress && (
+            <span>
+              Chunk {chunkProgress.currentChunk}/{chunkProgress.totalChunks}
+              {chunkProgress.isRetrying
+                ? ` retry attempt ${chunkProgress.attempt}`
+                : ` attempt ${chunkProgress.attempt}`}
+            </span>
+          )}
           {result?.metadata?.source_pages_count && (
             <span>Pages: {result.metadata.source_pages_count}</span>
+          )}
+          {uploadDiagnostics?.warnLargePayload && (
+            <span className="text-amber-700">
+              Upload estimate is large and may exceed single-request limits in production.
+            </span>
+          )}
+          {runMetrics && (
+            <span>
+              Chunk retries: {runMetrics.chunkRetries} (rate {runMetrics.chunkRetryRate}), server page retries: {runMetrics.serverPageRetryAttempts}, OCR concurrency: {runMetrics.serverOcrConcurrency ?? "-"}, adaptive recoveries: {runMetrics.serverAdaptiveRetryPages}
+            </span>
           )}
         </div>
       </div>
@@ -1045,7 +1777,7 @@ export default function BillsValidationPage() {
                           {entry.selected_service_code || "-"}
                         </td>
                         <td className="px-4 py-3 text-gray-700 text-xs">
-                          {entry.previous_status || "-"} → {entry.next_status}
+                          {entry.previous_status || "-"} â†’ {entry.next_status}
                         </td>
                         <td className="px-4 py-3 text-xs">
                           <span
